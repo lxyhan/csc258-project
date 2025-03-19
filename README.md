@@ -1,3 +1,104 @@
+#### Pseudocode
+---
+```
+.data
+BOTTLE_WIDTH
+BOTTLE_HEIGHT
+DEFAULT_SLEEP
+FAST_SLEEP
+
+# mutable variables
+# colour and capsule/virus information should be traceable in each entry:
+# we need 4 bits (for alignment): 2 bits on colour, 1 bit on capsule/virus
+BOTTLE_BITMAP
+IS_TOUCHDOWN
+SLEEP_TIME
+VIRUS_COUNT
+
+.text
+main:
+	# initialize the game
+	randomly select viruses in the bottom half of the bottle
+	# it is extremely unlikely that we need to store more than 8 bits of
+	# information for each coordinate of a pixel (the bottle will not have
+	# dimensions greater than 256x256), so we store both coordinates in a
+	# single register: p = (x, y) so that p[15:8] = x, p[7:0] = y
+	generate new capsule (random 2 colours, p0 p1 at top of bottle)
+	j game_loop
+
+rotate:
+	# take p0, p1 as arguments, found in a0-1
+	# (x0, y0) must be the position of the pivot (bottom left corner)
+	if horizontal (ie y0 == y1):
+		if validate x0, y0, x1 - 1, y1 - 1:
+			return x0, y0, x1 - 1, y1 - 1
+	if vertical (ie x0 == x1):
+		if validate x0 + 1, y0, x1, y1 + 1:
+			return x0 + 1, y0, x1, y1 + 1
+	return x0, y0, x1, y1
+
+validate:
+	# take x0, y0, x1, y1 as arguments, found in a0-3
+	# return 1 if the given capsule position is valid; 0 otherwise
+	check that capsule is not bleeding into horiz or vertical boundary
+	check that neither position is occupied in BOTTLE_BITMAP
+
+draw:
+	# take p0, p1, c0, c1 as arguments, found in a0-3
+	# if p0 == 0, do not draw capsule
+	draw backdrop (can be loaded into memory from a file)
+	for every i in range(len(BOTTLE_BITMAP)):
+		# could add an offset here: we div/mod because the bitmap is an array
+		draw BOTTLE_BITMAP[i] at position (x % BOTTLE_WIDTH, x / BOTTLE_WIDTH)
+	if not p0 == 0:
+		draw capsule
+
+game_loop:
+	if not IS_TOUCHDOWN:
+		if a key has been pressed:
+			if key is w:
+				p0, p1 = rotate p0, p1
+			elif key is a:
+				if validate x0 - 1, y0, x1 - 1, y1:
+					x0 -= 1
+					x1 -= 1
+			elif key is d:
+				if validate x0 + 1, y0, x1 + 1, y1:
+					x0 += 1
+					x1 += 1
+			# modify sleep time based on whether we are accelerated
+			else:
+				if key is s:
+					SLEEP_TIME = FAST_SLEEP
+				else:
+					SLEEP_TIME = DEFAULT_SLEEP
+		
+		# gravity
+		if (IS_TOUCHDOWN = validate x0, y0 + 1, x1, y1 + 1):
+			y0 += 1
+			y1 += 1
+	# the reason we don't immediately handle the touchdown is to give the
+	# player a chance to see the capsule land before capsules are cleared;
+	# otherwise that frame wouldn't be rendered
+	else:
+		commit colour c0 to position (x0, y0) in BOTTLE_BITMAP
+		commit colour c1 to position (x1, y1) in BOTTLE_BITMAP
+		p0 = 0
+		
+		# TODO: eliminating capsules, and falling unsupported capsules;
+		#       will probably take several sleep cycles so will call draw
+		#       in here at some point
+		
+		# after everything is done, create a new capsule
+		if virus count not 0:
+			create a new capsule
+			if not validate capsule:
+				game over
+	
+	draw p0, p1, c0, c1
+	sleep SLEEP_TIME
+```
+
 #### Pre-Pseudocode
 ---
 ###### DATA REPRESENTATION
