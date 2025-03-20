@@ -54,32 +54,29 @@ draw:
 		draw capsule
 
 game_loop:
-	if not IS_TOUCHDOWN:
-		if a key has been pressed:
-			if key is w:
-				p0, p1 = rotate p0, p1
-			elif key is a:
-				if validate x0 - 1, y0, x1 - 1, y1:
-					x0 -= 1
-					x1 -= 1
-			elif key is d:
-				if validate x0 + 1, y0, x1 + 1, y1:
-					x0 += 1
-					x1 += 1
-			# modify sleep time based on whether we are accelerated
+	if a key has been pressed:
+		if key is w:
+			p0, p1 = rotate p0, p1
+		elif key is a:
+			if validate x0 - 1, y0, x1 - 1, y1:
+				x0 -= 1
+				x1 -= 1
+		elif key is d:
+			if validate x0 + 1, y0, x1 + 1, y1:
+				x0 += 1
+				x1 += 1
+		# modify sleep time based on whether we are accelerated
+		else:
+			if key is s:
+				SLEEP_TIME = FAST_SLEEP
 			else:
-				if key is s:
-					SLEEP_TIME = FAST_SLEEP
-				else:
-					SLEEP_TIME = DEFAULT_SLEEP
-		
-		# gravity
-		if (IS_TOUCHDOWN = validate x0, y0 + 1, x1, y1 + 1):
-			y0 += 1
-			y1 += 1
-	# the reason we don't immediately handle the touchdown is to give the
-	# player a chance to see the capsule land before capsules are cleared;
-	# otherwise that frame wouldn't be rendered
+				SLEEP_TIME = DEFAULT_SLEEP
+	
+	# gravity
+	IS_TOUCHDOWN = not validate x0, y0 + 1, x1, y1 + 1
+	if not IS_TOUCHDOWN:
+		y0 += 1
+		y1 += 1
 	else:
 		commit colour c0 to position (x0, y0) in BOTTLE_BITMAP
 		commit colour c1 to position (x1, y1) in BOTTLE_BITMAP
