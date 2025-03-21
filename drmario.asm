@@ -1,4 +1,4 @@
-################# CSC258 Assembly Final Project ###################
+######################## CSC258 Assembly Final Project #######################
 # This file contains our implementation of Dr Mario.
 #
 # Student 1: Name, Student Number
