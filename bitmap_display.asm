@@ -6,8 +6,8 @@
 ##############################################################################
 
 ######################## Bitmap Display Configuration ########################
-# - Unit width in pixels: 8
-# - Unit height in pixels: 8
+# - Unit width in pixels: 1
+# - Unit height in pixels: 1
 # - Display width in pixels: 256
 # - Display height in pixels: 224
 # - Base Address for Display: 0x10008000 ($gp)
@@ -75,6 +75,22 @@ CAP_YELLOW:       # [left, right, up, down, centre]
 CAP_RED:
     .space 1280
 
+F_VIRUS_BLUE:
+    .asciiz "sprites/virus_blue.bmp"
+    .align 2
+F_VIRUS_YELLOW:
+    .asciiz "sprites/virus_yellow.bmp"
+    .align 2
+F_VIRUS_RED:
+    .asciiz "sprites/virus_red.bmp"
+    .align 2
+VIRUS_BLUE:      # virus pixel array; each pixel is 4 bytes, and \\
+    .space 256   # the dimensions of the sprite are TILE_SIZE x TILE_SIZE \\
+VIRUS_YELLOW:    # so that our size is 8 * 8 * 4 = 256
+    .space 256
+VIRUS_RED:
+    .space 256
+
 ##############################################################################
 # Immutable Data
 ##############################################################################
@@ -98,9 +114,33 @@ ADDR_DSPL:          # address of the bitmap display
 ##############################################################################
 # Mutable Data
 ##############################################################################
-BOTTLE:             # BOTTLE_WIDTH * BOTTLE_HEIGHT * 4 bytes per tile
-    .space 448      # this is an array containing the contents of the bottle \\
-GARBAGE:            # i.e. viruses and capsules that have landed
+BOTTLE:             # BOTTLE_WIDTH * BOTTLE_HEIGHT * 1 byte per tile
+    .space 128      # this is an array containing the contents of the bottle \\
+                    # i.e. viruses and capsules that have landed
+# each byte in this array carries three pieces of information:
+# [ direction | colour | type  ]
+# [ 4 bits    | 3 bits | 1 bit ]
+# direction represents which part of the capsule this entity represents
+# code | direction
+# ----------------
+# 0000 | left
+# 0001 | right
+# 0010 | top
+# 0011 | bottom
+# 0100 | centre
+# ----------------
+# colour represents the virus/capsule colour
+# code | colour
+# -------------
+#  100 | blue
+#  010 | yellow
+#  001 | red
+# -------------
+# type is a single bit: 0 if entity is a virus, 1 if it is a capsule;
+# a virus utilizes the colour field, but the direction field MUST BE 0x00
+# if the entire entity is 0x00, there is nothing at this position
+
+GARBAGE:
     .space 32
 BITMAP_OFFSET:
     .word
@@ -110,12 +150,15 @@ BITMAP_OFFSET:
 
 main:
     jal init_bmp
-
-    la $a0, BACKDROP
-    lw $a1, DISPLAY_HEIGHT
-    lw $a2, DISPLAY_WIDTH
-    li $a3, 0x0
-    jal draw_region
+    
+    # set up a few values in the bottle to draw
+    la $t0, BOTTLE
+    addi $t1, $zero, 0b00010101  # left-half yellow capsule
+    sb $t1, 0($t0)
+    addi $t1, $zero, 0b11111001  # centered blue capsule
+    sb $t1, 45($t0)
+    
+    jal draw
     
     la $s0, CAP_RED
     add $s0, $s0, 1024
@@ -123,12 +166,6 @@ main:
     lw $a1, TILE_SIZE
     lw $a2, TILE_SIZE
     lw $a3, BOTTLE_OFFSET
-    jal draw_region
-
-    la $a0, BACKDROP
-    lw $a1, DISPLAY_HEIGHT
-    lw $a2, DISPLAY_WIDTH
-    li $a3, 0x0
     jal draw_region
 
     j exit
@@ -294,11 +331,136 @@ load_bmp:
 
     jr $ra               # return to the caller
 
+## Draw a the current state of the game, including the backdrop,
+## all sprites / indicators, and the contents of the bottle. If
+## $a0 is 0, this function does not draw the current capsule (ie
+## the capsule controlled by the player).
+## This function only modifies $t registers.
+# Takes in the following parameters:
+# - $a0 : p0, the position of the first capsule half (bottom left)
+# - $a1 : p1, the position of the second capsule half
+# - $a2 : c0, the colour of the first capsule half
+# - $a3 : c1, the colour of the second capsule half
+# The positions given as parameters are tile-based and have origin
+# as the top-left corner of the bottle. The colours are encoded in
+# the same way as entities within the bottle.
+draw:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)           # save return address, as it will be overwritten in future calls
+    
+    la $a0, BACKDROP         # draw the backdrop
+    lw $a1, DISPLAY_HEIGHT   # backdrop takes up the entire display
+    lw $a2, DISPLAY_WIDTH
+    li $a3, 0x0              # the backdrop begins at the top-left \\
+    jal draw_region          # of the display
+    
+    # TODO: draw any sprites, like the doctor, the viruses, the score, etc
+    
+    la $t0, BOTTLE          # we begin drawing the bottle's contents
+    li $t1, 0               # introduce a loop variable y = $t1
+    lw $t2, BOTTLE_HEIGHT   # y is bound above by the bottle height
+draw_bottle_loop_y:
+    beq $t1, $t2, draw_bottle_loop_y_end   # terminate the loop once we read all rows
+    
+    li $t3, 0               # introduce a loop variable x = $t3
+    lw $t4, BOTTLE_WIDTH    # x is bound above by the bottle width
+draw_bottle_loop_x:
+    beq $t3, $t4, draw_bottle_loop_x_end   # terminate the loop once we read this row
+    
+    add $t6, $t1, $t3       # load information about (x, y) from the bottle;
+    add $t6, $t6, $t0       # (x, y) information is stored at BOTTLE[x + y] \\
+    lb $t5, 0($t6)          # because each entry occupies one byte
+    
+    beq $t5, 0, draw_bottle_sprite_end   # if there is nothing at this entry, \\
+                                         # skip to the next position
+    
+    addi $sp, $sp, -4       # save the current state of each register on the stack: \\
+    sw $t0, 0($sp)          # there is no guarantee that registers will not change \\
+    addi $sp, $sp, -4       # during the draw_region function call
+    sw $t1, 0($sp)
+    addi $sp, $sp, -4
+    sw $t2, 0($sp)
+    addi $sp, $sp, -4
+    sw $t3, 0($sp)
+    addi $sp, $sp, -4
+    sw $t4, 0($sp)
+    
+                            # extract the data from the entity byte:
+    andi $t7, $t5, 0x0f     # load the lower 4 bits of the entity: [colour | type]
+    andi $t8, $t5, 0xf0     # load the upper 4 bits of the entity: [direction]
+    srl $t8, $t8, 4         # shift the direction values into the lower 4 bits
+    
+    move $t6, $t3           # determine the position to draw at; each entry in \\
+    sll $t6, $t6, 16        # the bottle is one tile, which has dimension TILE_SIZE; \\
+    add $t6, $t6, $t1       # add this to the offset to determine the global pos: \\
+    lw $t5, BOTTLE_OFFSET   # global position = 8(x, y) + BOTTLE_OFFSET
+    add $t6, $t6, $t5
+    
+    # determine the array offset (TILE_SIZE * TILE_SIZE * 4 * t5)
+    lw $t9, TILE_SIZE       # determine the offset of the pixel array at which to \\
+    mult $t9, $t9           # begin drawing -- this is useful for the capsule \\
+    mflo $t9                # pixel arrays, which contain 5 sequences of 256 bytes \\
+    sll $t9, $t9, 2         # each of which corresponds to a specific direction.
+    mult $t9, $t8           # the offset is computed by
+    mflo $t9                # 4(TILE_SIZE * TILE_SIZE) * direction (ie $t8)
+    
+    lw $a1, TILE_SIZE       # load arguments for draw_region; these are not \\
+    lw $a2, TILE_SIZE       # dependent on what we are drawing (ie the pixel array)
+    move $a3, $t6
+    
+    beq $t7, 0b1000, draw_bottle_case_blue_virus     # determine which sprite to draw
+    beq $t7, 0b0100, draw_bottle_case_yellow_virus   # if we do not match any case, the
+    beq $t7, 0b0010, draw_bottle_case_red_virus      # data in our bottle is corrupted
+    beq $t7, 0b1001, draw_bottle_case_blue_capsule
+    beq $t7, 0b0101, draw_bottle_case_yellow_capsule
+    beq $t7, 0b0011, draw_bottle_case_red_capsule
+    
+draw_bottle_case_blue_virus:
+    la $v0, VIRUS_BLUE
+draw_bottle_case_yellow_virus:
+    la $v0, VIRUS_YELLOW
+draw_bottle_case_red_virus:
+    la $v0, VIRUS_RED
+draw_bottle_case_blue_capsule:
+    la $v0, CAP_BLUE
+    add $v0, $v0, $t9
+draw_bottle_case_yellow_capsule:
+    la $v0, CAP_YELLOW
+    add $v0, $v0, $t9
+draw_bottle_case_red_capsule:
+    la $v0, CAP_RED
+    add $v0, $v0, $t9
+    
+    lw $t4, 0($sp)         # load the state of each register prior to the function \\
+    addi $sp, $sp, 4       # call from the stack, so that we can be sure our data
+    lw $t3, 0($sp)         # is not modified
+    addi $sp, $sp, 4
+    lw $t2, 0($sp)
+    addi $sp, $sp, 4
+    lw $t1, 0($sp)
+    addi $sp, $sp, 4
+    lw $t0, 0($sp)
+    addi $sp, $sp, 4
+
+draw_bottle_sprite_end:
+    addi $t3, $t3, 1        # increment the loop variable
+    j draw_bottle_loop_x
+draw_bottle_loop_x_end:
+    addi $t1, $t1, 1        # increment the loop variable
+    j draw_bottle_loop_y
+draw_bottle_loop_y_end:
+    
+    # draw the current capsule
+    
+    lw $ra, 0($sp)          # reload the return address from the stack
+    addi $sp, $sp, 4
+    jr $ra                  # return to the caller
+
 ## Draw a pixel array with given width and height, positioned at a
 ## specified offset, to the display.
 ## This function only modifies $t registers.
 # Takes in the following parameters:
-# - $a0 : pixel array to read from
+# - $a0 : address of pixel array to read from
 # - $a1 : height of region to draw on
 # - $a2 : width of region to draw on
 # - $a3 : top-left corner of the region to draw on; this
@@ -306,18 +468,17 @@ load_bmp:
 #         here, (x, y) is a pixel, not tile, coordinate
 draw_region:
     lw $t0, ADDR_DSPL           # begin working with display region
-    andi $t8, $a3, 0x0000ffff   # $t8 = y0 = $a3[3:0]
-    andi $t9, $a3, 0xffff0000   # $t9 = x0 = $a3[7:4]
+    andi $t8, $a3, 0x0000ffff   # $t8 = y0 = $a3[15:0]
+    andi $t9, $a3, 0xffff0000   # $t9 = x0 = $a3[31:16]
     srl $t9, $t9, 16
     
-    li $t1, 0                       # introduce a loop variable y = $t1
-draw_loop_y:
-    bge $t1, $a1, draw_loop_y_end   # terminate the loop once we read all rows
+    li $t1, 0          # introduce a loop variable y = $t1
+draw_region_loop_y:
+    bge $t1, $a1, draw_region_loop_y_end   # terminate the loop once we read all rows
     
-    li $t2, 0                       # introduce a loop variable x = $t2
-
-draw_loop_x:
-    bge $t2, $a2, draw_loop_x_end   # terminate the loop once we read this row
+    li $t2, 0          # introduce a loop variable x = $t2
+draw_region_loop_x:
+    bge $t2, $a2, draw_region_loop_x_end   # terminate the loop once we read this row
 
     mult $t1, $a2      # assume only the lower bits will be significant: this is \\
     mflo $t3           # a safe assumption to make in our context
@@ -343,9 +504,9 @@ draw_loop_x:
 
 draw_non_transparent_exit:
     addi $t2, $t2, 1     # increment the loop variable
-    j draw_loop_x
-draw_loop_x_end:
+    j draw_region_loop_x
+draw_region_loop_x_end:
     addi $t1, $t1, 1     # increment the loop variable
-    j draw_loop_y
-draw_loop_y_end:
+    j draw_region_loop_y
+draw_region_loop_y_end:
     jr $ra               # return to the caller
