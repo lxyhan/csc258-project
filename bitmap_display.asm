@@ -38,20 +38,20 @@ F_CAP_BLUE_BOTTOM:
 F_CAP_BLUE_CENTRE:
     .asciiz "sprites/cap_blue_centre.bmp"
     .align 2
-F_CAP_YELLOW_LEFT:
-    .asciiz "sprites/cap_yellow_left.bmp"
+F_CAP_GREEN_LEFT:
+    .asciiz "sprites/cap_green_left.bmp"
     .align 2
-F_CAP_YELLOW_RIGHT:
-    .asciiz "sprites/cap_yellow_right.bmp"
+F_CAP_GREEN_RIGHT:
+    .asciiz "sprites/cap_green_right.bmp"
     .align 2
-F_CAP_YELLOW_TOP:
-    .asciiz "sprites/cap_yellow_top.bmp"
+F_CAP_GREEN_TOP:
+    .asciiz "sprites/cap_green_top.bmp"
     .align 2
-F_CAP_YELLOW_BOTTOM:
-    .asciiz "sprites/cap_yellow_bottom.bmp"
+F_CAP_GREEN_BOTTOM:
+    .asciiz "sprites/cap_green_bottom.bmp"
     .align 2
-F_CAP_YELLOW_CENTRE:
-    .asciiz "sprites/cap_yellow_centre.bmp"
+F_CAP_GREEN_CENTRE:
+    .asciiz "sprites/cap_green_centre.bmp"
     .align 2
 F_CAP_RED_LEFT:
     .asciiz "sprites/cap_red_left.bmp"
@@ -70,7 +70,7 @@ F_CAP_RED_CENTRE:
     .align 2
 CAP_BLUE:         # capsule pixel array; each pixel is 4 bytes \\
     .space 1280   # 256 * 5 = 1280; we store the bitmap in order \\
-CAP_YELLOW:       # [left, right, up, down, centre]
+CAP_GREEN:       # [left, right, up, down, centre]
     .space 1280
 CAP_RED:
     .space 1280
@@ -78,15 +78,15 @@ CAP_RED:
 F_VIRUS_BLUE:
     .asciiz "sprites/virus_blue.bmp"
     .align 2
-F_VIRUS_YELLOW:
-    .asciiz "sprites/virus_yellow.bmp"
+F_VIRUS_GREEN:
+    .asciiz "sprites/virus_green.bmp"
     .align 2
 F_VIRUS_RED:
     .asciiz "sprites/virus_red.bmp"
     .align 2
 VIRUS_BLUE:      # virus pixel array; each pixel is 4 bytes, and \\
     .space 256   # the dimensions of the sprite are TILE_SIZE x TILE_SIZE \\
-VIRUS_YELLOW:    # so that our size is 8 * 8 * 4 = 256
+VIRUS_GREEN:    # so that our size is 8 * 8 * 4 = 256
     .space 256
 VIRUS_RED:
     .space 256
@@ -107,7 +107,7 @@ BOTTLE_WIDTH:       # number of tiles in a bottle row
 BOTTLE_HEIGHT:      # number of tiles in a bottle column
     .word 16
 BOTTLE_OFFSET:      # the (x, y) starting position of the bottle's \\
-    .word 0x600040  # interior, in pixels; equates to (x, y) = (96, 64)
+    .word 0x400048  # interior, in pixels; equates to (x, y) = (96, 64)
 ADDR_DSPL:          # address of the bitmap display
     .word 0x10008000
 
@@ -133,7 +133,7 @@ BOTTLE:             # BOTTLE_WIDTH * BOTTLE_HEIGHT * 1 byte per tile
 # code | colour
 # -------------
 #  100 | blue
-#  010 | yellow
+#  010 | green
 #  001 | red
 # -------------
 # type is a single bit: 0 if entity is a virus, 1 if it is a capsule;
@@ -153,22 +153,23 @@ main:
     
     # set up a few values in the bottle to draw
     la $t0, BOTTLE
-    addi $t1, $zero, 0b00010101  # left-half yellow capsule
+    addi $t1, $zero, 0b00010101  # right-half green capsule
     sb $t1, 0($t0)
-    addi $t1, $zero, 0b11111001  # centered blue capsule
+    addi $t1, $zero, 0b00111001  # centered blue capsule
     sb $t1, 45($t0)
     
     jal draw
     
-    la $s0, CAP_RED
-    add $s0, $s0, 1024
-    move $a0, $s0
-    lw $a1, TILE_SIZE
-    lw $a2, TILE_SIZE
-    lw $a3, BOTTLE_OFFSET
-    jal draw_region
+    #la $s0, CAP_RED
+    #add $s0, $s0, 1024
+    #move $a0, $s0
+    #lw $a1, TILE_SIZE
+    #lw $a2, TILE_SIZE
+    #lw $a3, BOTTLE_OFFSET
+    #jal draw_region
 
     j exit
+
 exit:
     li $v0, 10              # terminate the program gracefully
     syscall
@@ -177,100 +178,105 @@ exit:
 # This function takes no arguments.
 init_bmp:
     move $s1, $ra              # save return address, as it will be overwritten in future calls
-
+    
     la $a0, F_BACKDROP         # read in the backdrop pixel array; this will always be \\
     la $a1, BACKDROP           # displayed behind all other drawings
     li $a2, 229376
     jal load_bmp
     
+    lw $s2, TILE_SIZE          # determine the number of pixels occupied by a tile sprite \\
+    mult $s2, $s2              # (ie viruses and capsules); as each pixel occupies 4 bytes, \\
+    mflo $s2                   # $s2 = array size = TILE_SIZE * TILE_SIZE * 4
+    sll $s2, $s2, 2
+    
     la $s0, CAP_BLUE           # load into $s so that it is untouched by load_bmp function
     la $a0, F_CAP_BLUE_LEFT    # load the left-half of the blue capsule into the first 256 \\ 
     move $a1, $s0              # bytes of CAP_BLUE; we will then load the right-half of the \\
-    li $a2, 256                # blue capsule into the next 256 bytes of CAP_BLUE, and so on
+    move $a2, $s2              # blue capsule into the next 256 bytes of CAP_BLUE, and so on
     jal load_bmp
 
-    add $s0, $s0, 256
+    add $s0, $s0, $s2
     la $a0, F_CAP_BLUE_RIGHT   # unfortunately, there is no way to loop this as files are \\
     move $a1, $s0              # named distinctly; in theory, we could automate file search \\
-    li $a2, 256                # with well-chosen file names but this becomes ugly very fast
+    move $a2, $s2              # with well-chosen file names but this becomes ugly very fast
     jal load_bmp
 
-    add $s0, $s0, 256
+    add $s0, $s0, $s2
     la $a0, F_CAP_BLUE_TOP
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
-    add $s0, $s0, 256
+    add $s0, $s0, $s2
     la $a0, F_CAP_BLUE_BOTTOM
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
     
-    add $s0, $s0, 256
+    add $s0, $s0, $s2
     la $a0, F_CAP_BLUE_CENTRE
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
-    la $s0, CAP_YELLOW          # read in the yellow capsule pixel arrays
-    la $a0, F_CAP_YELLOW_LEFT
+    la $s0, CAP_GREEN          # read in the green capsule pixel arrays
+    la $a0, F_CAP_GREEN_LEFT
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
-    add $s0, $s0, 256
-    la $a0, F_CAP_YELLOW_RIGHT
+    add $s0, $s0, $s2
+    la $a0, F_CAP_GREEN_RIGHT
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
-    add $s0, $s0, 256
-    la $a0, F_CAP_YELLOW_TOP
+    add $s0, $s0, $s2
+    la $a0, F_CAP_GREEN_TOP
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
-    add $s0, $s0, 256
-    la $a0, F_CAP_YELLOW_BOTTOM
+    add $s0, $s0, $s2
+    la $a0, F_CAP_GREEN_BOTTOM
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
     
-    add $s0, $s0, 256
-    la $a0, F_CAP_YELLOW_CENTRE
+    add $s0, $s0, $s2
+    la $a0, F_CAP_GREEN_CENTRE
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
     la $s0, CAP_RED          # read in the red capsule pixel arrays
     la $a0, F_CAP_RED_LEFT
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
-    add $s0, $s0, 256
+    add $s0, $s0, $s2
     la $a0, F_CAP_RED_RIGHT
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
-    add $s0, $s0, 256
+    add $s0, $s0, $s2
     la $a0, F_CAP_RED_TOP
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
-    add $s0, $s0, 256
+    add $s0, $s0, $s2
     la $a0, F_CAP_RED_BOTTOM
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
     
-    add $s0, $s0, 256
+    add $s0, $s0, $s2
     la $a0, F_CAP_RED_CENTRE
     move $a1, $s0
-    li $a2, 256
+    move $a2, $s2
     jal load_bmp
 
     jr $s1
@@ -359,17 +365,20 @@ draw:
     la $t0, BOTTLE          # we begin drawing the bottle's contents
     li $t1, 0               # introduce a loop variable y = $t1
     lw $t2, BOTTLE_HEIGHT   # y is bound above by the bottle height
-draw_bottle_loop_y:
+  draw_bottle_loop_y:
     beq $t1, $t2, draw_bottle_loop_y_end   # terminate the loop once we read all rows
     
     li $t3, 0               # introduce a loop variable x = $t3
     lw $t4, BOTTLE_WIDTH    # x is bound above by the bottle width
-draw_bottle_loop_x:
+  draw_bottle_loop_x:
     beq $t3, $t4, draw_bottle_loop_x_end   # terminate the loop once we read this row
-    
-    add $t6, $t1, $t3       # load information about (x, y) from the bottle;
-    add $t6, $t6, $t0       # (x, y) information is stored at BOTTLE[x + y] \\
-    lb $t5, 0($t6)          # because each entry occupies one byte
+
+    lw $t6, BOTTLE_WIDTH    # load information about (x, y) from the bottle;
+    mult $t6, $t1           # (x, y) information is stored at BOTTLE[x + y * BOTTLE_WIDTH] \\
+    mflo $t6                # because each entry occupies one byte
+    add $t6, $t6, $t3
+    add $t6, $t6, $t0
+    lb $t5, 0($t6)
     
     beq $t5, 0, draw_bottle_sprite_end   # if there is nothing at this entry, \\
                                          # skip to the next position
@@ -393,7 +402,10 @@ draw_bottle_loop_x:
     move $t6, $t3           # determine the position to draw at; each entry in \\
     sll $t6, $t6, 16        # the bottle is one tile, which has dimension TILE_SIZE; \\
     add $t6, $t6, $t1       # add this to the offset to determine the global pos: \\
-    lw $t5, BOTTLE_OFFSET   # global position = 8(x, y) + BOTTLE_OFFSET
+    li $t0, 8               # global position = 8(x, y) + BOTTLE_OFFSET
+    mult $t6, $t0
+    mflo $t6
+    lw $t5, BOTTLE_OFFSET
     add $t6, $t6, $t5
     
     # determine the array offset (TILE_SIZE * TILE_SIZE * 4 * t5)
@@ -409,28 +421,36 @@ draw_bottle_loop_x:
     move $a3, $t6
     
     beq $t7, 0b1000, draw_bottle_case_blue_virus     # determine which sprite to draw
-    beq $t7, 0b0100, draw_bottle_case_yellow_virus   # if we do not match any case, the
+    beq $t7, 0b0100, draw_bottle_case_green_virus   # if we do not match any case, the
     beq $t7, 0b0010, draw_bottle_case_red_virus      # data in our bottle is corrupted
     beq $t7, 0b1001, draw_bottle_case_blue_capsule
-    beq $t7, 0b0101, draw_bottle_case_yellow_capsule
+    beq $t7, 0b0101, draw_bottle_case_green_capsule
     beq $t7, 0b0011, draw_bottle_case_red_capsule
     
-draw_bottle_case_blue_virus:
-    la $v0, VIRUS_BLUE
-draw_bottle_case_yellow_virus:
-    la $v0, VIRUS_YELLOW
-draw_bottle_case_red_virus:
-    la $v0, VIRUS_RED
-draw_bottle_case_blue_capsule:
-    la $v0, CAP_BLUE
-    add $v0, $v0, $t9
-draw_bottle_case_yellow_capsule:
-    la $v0, CAP_YELLOW
-    add $v0, $v0, $t9
-draw_bottle_case_red_capsule:
-    la $v0, CAP_RED
-    add $v0, $v0, $t9
-    
+  draw_bottle_case_blue_virus:
+    la $a0, VIRUS_BLUE
+    j draw_bottle_switch_end
+  draw_bottle_case_green_virus:
+    la $a0, VIRUS_GREEN
+    j draw_bottle_switch_end
+  draw_bottle_case_red_virus:
+    la $a0, VIRUS_RED
+    j draw_bottle_switch_end
+  draw_bottle_case_blue_capsule:
+    la $a0, CAP_BLUE
+    add $a0, $a0, $t9
+    j draw_bottle_switch_end
+  draw_bottle_case_green_capsule:
+    la $a0, CAP_GREEN
+    add $a0, $a0, $t9
+    j draw_bottle_switch_end
+  draw_bottle_case_red_capsule:
+    la $a0, CAP_RED
+    add $a0, $a0, $t9
+  draw_bottle_switch_end:
+
+    jal draw_region        # call to draw the entity
+  
     lw $t4, 0($sp)         # load the state of each register prior to the function \\
     addi $sp, $sp, 4       # call from the stack, so that we can be sure our data
     lw $t3, 0($sp)         # is not modified
@@ -442,15 +462,15 @@ draw_bottle_case_red_capsule:
     lw $t0, 0($sp)
     addi $sp, $sp, 4
 
-draw_bottle_sprite_end:
+  draw_bottle_sprite_end:
     addi $t3, $t3, 1        # increment the loop variable
     j draw_bottle_loop_x
-draw_bottle_loop_x_end:
+  draw_bottle_loop_x_end:
     addi $t1, $t1, 1        # increment the loop variable
     j draw_bottle_loop_y
-draw_bottle_loop_y_end:
+  draw_bottle_loop_y_end:
     
-    # draw the current capsule
+    # TODO: draw the current capsule
     
     lw $ra, 0($sp)          # reload the return address from the stack
     addi $sp, $sp, 4
@@ -473,11 +493,11 @@ draw_region:
     srl $t9, $t9, 16
     
     li $t1, 0          # introduce a loop variable y = $t1
-draw_region_loop_y:
+  draw_region_loop_y:
     bge $t1, $a1, draw_region_loop_y_end   # terminate the loop once we read all rows
     
     li $t2, 0          # introduce a loop variable x = $t2
-draw_region_loop_x:
+  draw_region_loop_x:
     bge $t2, $a2, draw_region_loop_x_end   # terminate the loop once we read this row
 
     mult $t1, $a2      # assume only the lower bits will be significant: this is \\
@@ -502,11 +522,11 @@ draw_region_loop_x:
     add $t6, $t0, $t3    # update display to include the pixel retrieved from \\
     sw $t4, 0($t6)       # the pixel array
 
-draw_non_transparent_exit:
+  draw_non_transparent_exit:
     addi $t2, $t2, 1     # increment the loop variable
     j draw_region_loop_x
-draw_region_loop_x_end:
+  draw_region_loop_x_end:
     addi $t1, $t1, 1     # increment the loop variable
     j draw_region_loop_y
-draw_region_loop_y_end:
+  draw_region_loop_y_end:
     jr $ra               # return to the caller
