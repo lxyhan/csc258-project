@@ -111,6 +111,10 @@ BOTTLE_HEIGHT:      # number of tiles in a bottle column
     .word 16
 BOTTLE_OFFSET:      # the (x, y) starting position of the bottle's \\
     .word 0x400048  # interior, in pixels; equates to (x, y) = (96, 64)
+VIRUS_CAP:          # number of viruses to spawn at game start
+    .word 4
+VIRUS_YLIM:         # greatest height from the bottom of the bottle
+    .word 10        # that a virus may spawn
 ADDR_DSPL:          # address of the bitmap display
     .word 0x10008000
 ADDR_KBRD:          # address of the keyboard
@@ -120,7 +124,7 @@ ADDR_KBRD:          # address of the keyboard
 # Mutable Data
 ##############################################################################
 BOTTLE:             # BOTTLE_WIDTH * BOTTLE_HEIGHT * 1 byte per tile
-    .space 128      # this is an array containing the contents of the bottle \\
+    .space 128    # this is an array containing the contents of the bottle \\
                     # i.e. viruses and capsules that have landed
 # each byte in this array carries three pieces of information:
 # [ direction | colour | type  ]
@@ -160,14 +164,9 @@ BITMAP_OFFSET:
 ## starting capsule, and randomly positioning viruses.
 # This function takes no arguments.
 main:
-    jal init_bmp   # initialize the bitmap
-    
-    # set up a few values in the bottle to draw for testing
-    la $t0, BOTTLE
-    addi $t1, $zero, 0b00000100
-    sb $t1, 0($t0)
-    addi $t1, $zero, 0b00000010
-    sb $t1, 45($t0)
+    jal init_bottle      # zero out the initial bottle array
+    jal init_bmp         # initialize the bitmap
+    jal generate_virus   # place initial viruses in bottle
 
     li $a0, 0      # temporarily set the first argument to zero so that \\
     jal draw       # the player capsule is not drawn
@@ -193,6 +192,27 @@ game_loop:
 exit:
     li $v0, 10   # send a system call to exit the program
     syscall
+
+## Initialize all values within the BOTTLE array to zero, so that there
+## are no non-zero entries that are not deliberately entered later on.
+init_bottle:
+    la $t9, BOTTLE
+    
+    li $t0, 0               # introduce loop variable $t0
+    lw $t1, BOTTLE_WIDTH    # compute the length of the BOTTLE array; \\
+    lw $t2, BOTTLE_HEIGHT   # this is BOTTLE_LENGTH * BOTTLE_WIDTH
+    mult $t1, $t2
+    mtlo $t1                # use array length as the bound on $t0
+  init_bottle_loop:
+    beq $t0, $t1 init_bottle_exit
+    sb $zero, 0($t9)        # set value at $t0 to zero
+
+    addi $t9, $t9, 1        # move the location you're working with
+    addi $t0, $t0, 1        # update loop variable
+    j init_bottle_loop
+  init_bottle_exit:
+    jr $ra
+    
 
 ## Load all pixel arrays into process memory from the set of bitmaps.
 # This function takes no arguments.
@@ -371,6 +391,86 @@ load_bmp:
     syscall              # close file
 
     jr $ra               # return to the caller
+
+## Generate a random colour, in the format specified for BOTTLE
+## entries. Returns a one-hot encoding of the colour generated:
+## code | colour
+## -------------
+##  100 | blue
+##  010 | green
+##  001 | red
+## Returns the colour in $v0.
+generate_colour:
+    li $v0, 42   # system call for generating a bounded random int
+    li $a0, 0    # set the generator ID to 0 (irrelevant) 
+    li $a1, 3    # generate a number in {0, 1, 2}
+    syscall      # this random number is now stored in $a0
+    
+    li $t1, 1            # shift 1 based on generated integer; \\
+    sllv $v0, $t1, $a0   # this is our return value
+    jr $ra               # return to caller
+
+## Generate VIRUS_COUNT viruses on the bottle grid.
+# This function takes no arguments.
+generate_virus:
+    li $t0, 0           # introduce a loop variable $t0
+    lw $t1, VIRUS_CAP   # bound loop variable by $t1
+  generate_virus_loop:                  # exit loop once we have \\
+    beq $t0, $t1, generate_virus_exit   # generated all viruses
+
+    li $v0, 42             # generate a random int
+    li $a0, 0              # set the generator ID to 0
+    lw $a1, BOTTLE_WIDTH   # bound int above by bottle width
+    syscall
+    move $t2, $a0          # store this as our randomized x pos
+
+    li $v0, 42             # generate a random int
+    li $a0, 0
+    lw $a1, VIRUS_YLIM     # int can only be in the lowest \\
+    syscall                # VIRUS_YLIM rows
+    lw $t3, BOTTLE_HEIGHT  # invert as y = 0 is at top of bottle: \\
+    sub $t3, $t3, $a0      # we must subtract 1 from the result, as \\
+    addi $t3, $t3, -1      # 16 - [0, YLIM] = [16 - YLIM, 16], allowing \\
+                           # for y = 16, which we cannot have; \\
+                           # store this as our randomized y pos
+
+    la $t4, BOTTLE         # check that the randomized position, \\
+    lw $t5, BOTTLE_WIDTH   # at index y * BOTTLE_WIDTH + x since \\
+    mult $t3, $t5          # each entry occupies only 1 byte, \\
+    mflo $t5               # is empty; if it is, then save the \\
+    add $t5, $t5, $t2      # virus at that position; otherwise, \\
+    add $t4, $t4, $t5      # try again
+    lb $t6, 0($t4)
+    bne $t6, $zero, generate_virus_loop
+
+    addi $sp, $sp, -4      # generate a new colour for this virus; \\
+    sw $t0, 0($sp)         # as this makes a function call, we \\
+    addi $sp, $sp, -4      # must store the return address and \\
+    sw $t1, 0($sp)         # any data that we need to persist \\
+    addi $sp, $sp, -4      # in the stack
+    sw $t4, 0($sp)
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    jal generate_colour
+
+    lw $ra, 0($sp)         # load data from the stack
+    addi $sp, $sp, 4
+    lw $t4, 0($sp)
+    addi $sp, $sp, 4
+    lw $t1, 0($sp)
+    addi $sp, $sp, 4
+    lw $t0, 0($sp)
+    addi $sp, $sp, 4
+
+    sll $v0, $v0, 1        # we want entry to have form \\
+    sb $v0, 0($t4)         # [ 0000 | colour | 0 ] for a coloured \\
+                           # virus, so we shift one left and save
+
+    addi, $t0, $t0, 1      # only increment if a virus was \\
+    j generate_virus_loop  # successfully generated
+  generate_virus_exit:
+    jr $ra
 
 ## Draw a the current state of the game, including the backdrop,
 ## all sprites / indicators, and the contents of the bottle. If
