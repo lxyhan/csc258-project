@@ -383,7 +383,8 @@ load_bmp:
 # - $a2 : e0, the [ direction | colour | 1 ] (entity byte) of capsule 1
 # - $a3 : e1, the [ direction | colour | 1 ] (entity byte) of capsule 2
 # The positions given as parameters are tile-based and have origin
-# as the top-left corner of the bottle. The entity bytes are encoded in
+# as the top-left corner of the bottle. They should be in format
+# (x1, y1) = ($a0[31:16], $a0[15:0]); The entity bytes are encoded in
 # the same way as entities stored within BOTTLE.
 draw:
     addi $sp, $sp, -4
@@ -495,7 +496,8 @@ draw:
 ## on the bottle grid at the specified location.
 # Takes in the following parameters:
 # - $a0 : the entity byte for the entity to be drawn
-# - $a1 : the (x, y) coordinate, in terms of tiles, of the entity
+# - $a1 : the (x, y) coordinate, in terms of tiles, of the entity;
+#         this should be in format (x, y) = ($a1[31:16], $a1[15:0]) 
 draw_entity:
                             # extract the data from the entity byte:
     andi $t7, $a0, 0x0f     # load the lower 4 bits of the entity: [colour | type]
