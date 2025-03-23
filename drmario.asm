@@ -124,7 +124,7 @@ ADDR_KBRD:          # address of the keyboard
 # Mutable Data
 ##############################################################################
 BOTTLE:             # BOTTLE_WIDTH * BOTTLE_HEIGHT * 1 byte per tile
-    .space 128    # this is an array containing the contents of the bottle \\
+    .space 128      # this is an array containing the contents of the bottle \\
                     # i.e. viruses and capsules that have landed
 # each byte in this array carries three pieces of information:
 # [ direction | colour | type  ]
@@ -149,10 +149,21 @@ BOTTLE:             # BOTTLE_WIDTH * BOTTLE_HEIGHT * 1 byte per tile
 # a virus utilizes the colour field, but the direction field MUST BE 0x00
 # if the entire entity is 0x00, there is nothing at this position
 
+CAPSULE_P1:         # position of first and second half of player capsule, \\ 
+    .space 4        # resp, as tile coordinates in the bottle grid. \\
+CAPSULE_P2:         # the first half is always the bottom-left corner. \\
+    .space 4        # positions are in format
+                    # (xn, yn) = (CAPSULE_Pn[31:16], CAPSULE_Pn[15:0])
+CAPSULE_E1:         # direction and colour of first and second half of player \\ 
+    .space 1        # capsule, organized as described above in form \\
+CAPSULE_E2:         # [ direction | colour | 1 ], and encoded as the entries
+    .space 1        # of BOTTLE are
+    .align 2
+
 GARBAGE:
     .space 32
 BITMAP_OFFSET:
-    .word
+    .space 4
 
 ##############################################################################
 # Code
@@ -167,8 +178,8 @@ main:
     jal init_bottle      # zero out the initial bottle array
     jal init_bmp         # initialize the bitmap
     jal generate_virus   # place initial viruses in bottle
+    jal generate_capsule # generate a new capsule for the player
 
-    li $a0, 0      # temporarily set the first argument to zero so that \\
     jal draw       # the player capsule is not drawn
 
     # TODO: jump to game_loop once it is developed!
@@ -472,31 +483,55 @@ generate_virus:
   generate_virus_exit:
     jr $ra
 
+## Generate a new player capsule and load its information into.
+## CAPSULE_Pn and CAPSULE_En memory locations.
+# This function takes no arguments, and returns:
+# - $v0 : 1 if the capsule was successfully generated; 0 if the 
+#         capsule cannot generate. This latter circumstance only 
+#         occurs if the capsule init position is already occupied
+#         by some other entity, and should be used to trigger Game Over.
+generate_capsule:
+    lw $t0, BOTTLE_WIDTH   # the capsule is positioned in the middle \\
+    sra $t0, $t0, 1        # of the top row, so compute the halfway \\
+    sll $t2, $t0, 16       # point of the bottle grid for the x \\
+    sw $t2, CAPSULE_P2     # coordinate, and set the y coordinate to 0
+    # NOTE: we set P2 first to reduce the number of operations. For \\
+    # example, a grid with width 8 will have midpoint 4. This is the \\
+    # left half of the middle due to 0-indexing. To set P1 first, we \\
+    # would subtract 1 from the midpoint, then add 1 back after for P2.
+
+    addi $t1, $t0, -1      # the capsule always begins horizontally, \\
+    sll $t1, $t1, 16       # so the first half is always to the left
+    sw $t1, CAPSULE_P1
+    
+    addi $sp, $sp, -4      # store the return address for the current \\
+    sw $ra, 0($sp)         # function in the stack prior to making other
+                           # function calls
+
+    jal generate_colour        # generate a colour for the first capsule \\
+    move $t0, $v0              # half, and shift left by one to align with \\
+    sll $t0, $t0, 1            # the expected formatting (colour data ends \\
+    ori $t0, $t0, 0b00000001   # at bit 1 not 0); then indicate the entity \\
+    sb $t0, CAPSULE_E1         # is a capsule in the last bit with 1
+
+    jal generate_colour        # generate a colour for the second capsule \\
+    move $t0, $v0              # half and set up entity byte using the \\
+    sll $t0, $t0, 1            # same procedure as the first capsule half
+    ori $t0, $t0, 0b00010001
+    sb $t0, CAPSULE_E2
+    
+    lw $ra, 0($sp)         # retrieve the return address stored on \\
+    addi $sp, $sp, 4       # the stack, and return to the caller
+    jr $ra
+
 ## Draw a the current state of the game, including the backdrop,
 ## all sprites / indicators, and the contents of the bottle. If
-## $a0 is 0, this function does not draw the current capsule (ie
-## the capsule controlled by the player).
+## CAPSULE_P1 is 0, this function does not draw the current capsule
+## controlled by the player.
 ## This function only modifies $t registers.
-# Takes in the following parameters:
-# - $a0 : p0, the position of capsule half 1 (bottom left)
-# - $a1 : p1, the position of capsule half 2
-# - $a2 : e0, the [ direction | colour | 1 ] (entity byte) of capsule 1
-# - $a3 : e1, the [ direction | colour | 1 ] (entity byte) of capsule 2
-# The positions given as parameters are tile-based and have origin
-# as the top-left corner of the bottle. They should be in format
-# (x1, y1) = ($a0[31:16], $a0[15:0]); The entity bytes are encoded in
-# the same way as entities stored within BOTTLE.
 draw:
     addi $sp, $sp, -4
     sw $ra, 0($sp)           # save return address, as it will be overwritten in future calls
-    addi $sp, $sp, -4
-    sw $a0, 0($sp)           # save all arguments, as they are used only near the function's \\
-    addi $sp, $sp, -4        # end, and $a registers are used until that point for calls to \\
-    sw $a1, 0($sp)           # other functions
-    addi $sp, $sp, -4
-    sw $a2, 0($sp)
-    addi $sp, $sp, -4
-    sw $a3, 0($sp)
     
     la $a0, BACKDROP         # draw the backdrop
     lw $a1, DISPLAY_HEIGHT   # backdrop takes up the entire display
@@ -565,18 +600,10 @@ draw:
     addi $t1, $t1, 1        # increment the loop variable
     j draw_bottle_loop_y
   draw_bottle_loop_y_end:
-
-    lw $t3, 0($sp)          # we now need the original arguments to this \\
-    addi $sp, $sp, 4        # function: load them into $t registers \\
-    lw $t2, 0($sp)          # from the stack
-    addi $sp, $sp, 4
-    lw $t1, 0($sp)
-    addi $sp, $sp, 4
-    lw $t0, 0($sp)
-    addi $sp, $sp, 4
-    lw $ra, 0($sp)          # reload the return address from the stack
-    addi $sp, $sp, 4
-
+    
+    lw $t0, CAPSULE_P1        # load information about the first half \\
+    lb $t2, CAPSULE_E1        # of the player-controlled capsule
+    
     beq $t0, 0, draw_return   # if first argument is zero, do not draw \\
                               # the player capsule
     
@@ -584,11 +611,16 @@ draw:
     move $a1, $t0
     jal draw_entity
 
+    lw $t1, CAPSULE_P2        # load information about the second half \\
+    lb $t3, CAPSULE_E2        # of the player-controlled capsule
+
     move $a0, $t3             # draw the second half of the player capsule
     move $a1, $t1
     jal draw_entity
 
   draw_return:
+    lw $ra, 0($sp)          # reload the return address from the stack
+    addi $sp, $sp, 4
     jr $ra                  # return to the caller
 
 ## Draw the entity (either a capsule half or a virus) with the given
@@ -623,34 +655,34 @@ draw_entity:
     lw $a2, TILE_SIZE       # dependent on what we are drawing (ie the pixel array)
     move $a3, $t1
     
-    beq $t7, 0b1000, draw_bottle_case_blue_virus     # determine which sprite to draw; \\
-    beq $t7, 0b0100, draw_bottle_case_green_virus    # if we do not match any case, the \\
-    beq $t7, 0b0010, draw_bottle_case_red_virus      # data in our bottle is corrupted
-    beq $t7, 0b1001, draw_bottle_case_blue_capsule
-    beq $t7, 0b0101, draw_bottle_case_green_capsule
-    beq $t7, 0b0011, draw_bottle_case_red_capsule
+    beq $t7, 0b1000, draw_entity_case_blue_virus     # determine which sprite to draw; \\
+    beq $t7, 0b0100, draw_entity_case_green_virus    # if we do not match any case, the \\
+    beq $t7, 0b0010, draw_entity_case_red_virus      # data is corrupted
+    beq $t7, 0b1001, draw_entity_case_blue_capsule
+    beq $t7, 0b0101, draw_entity_case_green_capsule
+    beq $t7, 0b0011, draw_entity_case_red_capsule
     
-  draw_bottle_case_blue_virus:
+  draw_entity_case_blue_virus:
     la $a0, VIRUS_BLUE
-    j draw_bottle_switch_end
-  draw_bottle_case_green_virus:
+    j draw_entity_switch_end
+  draw_entity_case_green_virus:
     la $a0, VIRUS_GREEN
-    j draw_bottle_switch_end
-  draw_bottle_case_red_virus:
+    j draw_entity_switch_end
+  draw_entity_case_red_virus:
     la $a0, VIRUS_RED
-    j draw_bottle_switch_end
-  draw_bottle_case_blue_capsule:
+    j draw_entity_switch_end
+  draw_entity_case_blue_capsule:
     la $a0, CAP_BLUE
     add $a0, $a0, $t9
-    j draw_bottle_switch_end
-  draw_bottle_case_green_capsule:
+    j draw_entity_switch_end
+  draw_entity_case_green_capsule:
     la $a0, CAP_GREEN
     add $a0, $a0, $t9
-    j draw_bottle_switch_end
-  draw_bottle_case_red_capsule:
+    j draw_entity_switch_end
+  draw_entity_case_red_capsule:
     la $a0, CAP_RED
     add $a0, $a0, $t9
-  draw_bottle_switch_end:
+  draw_entity_switch_end:
 
     addi $sp, $sp, -4      # save return address, as this will be overwritten in \\
     sw $ra, 0($sp)         # the next jal instruction
