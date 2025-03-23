@@ -508,6 +508,8 @@ generate_capsule:
     sw $ra, 0($sp)         # function in the stack prior to making other
                            # function calls
 
+    # TODO: validate these two positions: return 0 if invalid!
+
     jal generate_colour        # generate a colour for the first capsule \\
     move $t0, $v0              # half, and shift left by one to align with \\
     sll $t0, $t0, 1            # the expected formatting (colour data ends \\
@@ -522,6 +524,50 @@ generate_capsule:
     
     lw $ra, 0($sp)         # retrieve the return address stored on \\
     addi $sp, $sp, 4       # the stack, and return to the caller
+    jr $ra
+
+## Validate the position of a given entity. This function checks that
+## the entity does not collide with any entity currently in the
+## BOTTLE array, and verifies that it does not fall outside the bounds
+## of the bottle grid.
+# Takes in the following parameters:
+# - $a0 : the position, in tile coordinates, to check for a collision;
+#          this should be in format (x, y) = ($a0[31:16], $a0[15:0]) 
+# and returns:
+# - $v0 : whether a collision occurs; 1 if there is no collision;
+#         1 if there is a collision
+validate: 
+    # check that the entity is in bounds
+    lw $t0, BOTTLE_WIDTH        # load in the bottle grid dimensions
+    lw $t1, BOTTLE_HEIGHT
+    li $t2, -1                  # used for bounding coordinates below
+    andi $t3, $a0, 0xffff0000   # extract x and y information from \\
+    srl $t3, $t3, 16            # the provided argument, in that order
+    andi $t4, $a0, 0x0000ffff
+    
+    slt $t5, $t2, $t3           # check that x > -1
+    slt $t7, $t3, $t0           # check that x < BOTTLE_WIDTH
+    and $t5, $t5, $t7           # 1 if both conditions hold
+
+    slt $t6, $t2, $t4           # check that y > -1 (unnecessary)
+    slt $t7, $t4, $t1           # check that y < BOTTLE_HEIGHT
+    and $t6, $t6, $t7           # 1 if both conditions hold
+
+    and $v0, $t5, $t6           # 1 if all conditions hold; otherwise \\
+    beq $v0, 0, validate_exit   # return with 0
+    
+    # check that the position is not occupied
+    mult $t0, $t4               # compute the index of this entity in \\
+    mflo $t8                    # the BOTTLE array; as each entry is \\
+    add $t8, $t8, $t3           # 1 byte, this is y * WIDTH + x
+    la $t9, BOTTLE
+    add $t9, $t9, $t8
+    lb $t9, 0($t9)              # this is the entry at position (x, y)
+
+    beq $t9, 0, validate_exit   # $v0 is currently 1, so return 1 \\
+    li $v0, 0                   # if entry is nonzero; else return 0
+    
+  validate_exit:
     jr $ra
 
 ## Draw a the current state of the game, including the backdrop,
