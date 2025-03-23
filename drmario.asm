@@ -115,6 +115,12 @@ VIRUS_CAP:          # number of viruses to spawn at game start
     .word 4
 VIRUS_YLIM:         # greatest height from the bottom of the bottle
     .word 10        # that a virus may spawn
+SLEEP_TIME:         # time to sleep between frames by default
+    .word 16
+DELTA_CAP_DEFAULT:  # time interval between gravity applications \\
+    .word 1500     # by default
+DELTA_CAP_ACCEL:    # time interval between gravity applications \\
+    .word 500     # when accelerated by user input
 ADDR_DSPL:          # address of the bitmap display
     .word 0x10008000
 ADDR_KBRD:          # address of the keyboard
@@ -160,6 +166,13 @@ CAPSULE_E2:         # [ direction | colour | 1 ], and encoded as the entries
     .space 1        # of BOTTLE are
     .align 2
 
+DELTA_CAP:          # time interval between gravity applications
+    .space 4
+DELTA:              # time since last gravity application
+    .word 0
+TIMESTAMP:          # the last time measured on the most recent time syscall
+    .space 4
+    
 GARBAGE:
     .space 32
 BITMAP_OFFSET:
@@ -179,25 +192,61 @@ main:
     jal init_bmp         # initialize the bitmap
     jal generate_virus   # place initial viruses in bottle
     jal generate_capsule # generate a new capsule for the player
+    jal draw             # draw the state of the game before start
 
-    jal draw       # the player capsule is not drawn
+    li $v0, 30
+    syscall              # determine current system time
+    sw $a0, TIMESTAMP    # load system time as first timestamp
 
-    # TODO: jump to game_loop once it is developed!
-    j exit
+    j game_loop          # begin the main game loop
 
 ## The main game loop. This runs indefinitely once the game state
 ## is initialized by the main function.
 # This function takes no arguments.
 game_loop:
+    lw $t0, DELTA_CAP_DEFAULT   # set the sleep time to the default amount; \\
+    sw $t0, DELTA_CAP           # this may be modified on downward key press
+  
     # 1a. Check if key has been pressed
-    # 1b. Check which key has been pressed
-    # 2a. Check for collisions
-	# 2b. Update locations (capsules)
-	# 3. Draw the screen
-	# 4. Sleep
+    lw $t0, ADDR_KBRD                  # $t0 = base address for keyboard
+    lw $t8, 0($t0)                     # load first word from keyboard
+    beq $t8, 0, after_keyboard_input   # if first word 1, key is pressed; \\
+    jal keyboard_input                 # otherwise, skip input processing
+    
+  after_keyboard_input:
+    li $v0, 30
+    syscall                 # load system time into ($a1, $a0)
+    move $t1, $a0           # determine current timestamp
+    lw $t2, TIMESTAMP       # determine previous timestamp
+    
+    subu $t3, $t1, $t2      # compute time elapsed
+    lw $t0, DELTA
+    add $t0, $t0, $t3       # add time elapsed to delta
+    sw $t0, DELTA           # update delta
+    sw $t1, TIMESTAMP       # update timestamp
 
-    # 5. Go back to Step 1
-    j game_loop
+    lw $t5, DELTA_CAP
+    blt $t0, $t5, after_gravity   # if delta < delta_cap, continue; \\
+    sub $t0, $t0, $t5             # otherwise, decrease delta by \\
+    sw $t0, DELTA                 # its upper limit DELTA_CAP \\
+    li $a0, 0x1
+    jal displace
+  after_gravity:
+    jal draw                # draw the frame after all events are handled
+
+    # TODO: problems:
+    # 1. there's this weird keyboard buffering so that your input continues
+    #    to be interpreted even after you release the key
+    # 2. there is major flickering in the display; we can reduce this
+    #    by buffering the display, and only displaying the regions that
+    #    can be modified (the grid, next pill, score board); we can also
+    #    only draw if an event occurs (processed input event/gravity/clear)
+    
+    li $v0, 32
+    lw, $a0, SLEEP_TIME   # set the amount of time to sleep
+    syscall               # sleep until the next frame     
+
+    j game_loop           # return to the beginning of the loop
 
 ## Exit the program gracefully.
 exit:
@@ -530,6 +579,7 @@ generate_capsule:
 ## the entity does not collide with any entity currently in the
 ## BOTTLE array, and verifies that it does not fall outside the bounds
 ## of the bottle grid.
+# This function operates only on $t registers.
 # Takes in the following parameters:
 # - $a0 : the position, in tile coordinates, to check for a collision;
 #          this should be in format (x, y) = ($a0[31:16], $a0[15:0]) 
@@ -570,9 +620,155 @@ validate:
   validate_exit:
     jr $ra
 
+## Handle keyboard input. This function assumes that keyboard input 
+## has been provided, and omits the check.
+# This function takes in no arguments.
+keyboard_input:
+    addi $sp, $sp, -4               # save the return address
+    sw $ra, 0($sp)
+  
+    lw $t0, ADDR_KBRD               # load the keyboard base address
+    lw $t1, 4($t0)                  # load the key pressed
+    
+    beq $t1, 0x71, exit             # exit if q was pressed
+    beq $t1, 0x70, pause            # pause if p was pressed
+    beq $t1, 0x73, accel_down       # move right if s was pressed
+    beq $t1, 0x77, rotate           # rotate CCW if w was pressed
+    beq $t1, 0x61, move_left        # move left if a was pressed
+    beq $t1, 0x64, move_right       # move right if d was pressed
+
+  rotate:                           # rotate the player controlled pill CCw
+    # TODO: maybe extract this into a function of its own
+    lw $t0, CAPSULE_P1              # load capsule information
+    lw $t1, CAPSULE_P2
+    andi $t2, $t0, 0xffff           # extract the y components of each \\
+    andi $t3, $t1, 0xffff           # player-controlled capsule half
+    lb $t5, CAPSULE_E1
+    lb $t6, CAPSULE_E2
+
+    beq $t2, $t3, rotate_horizontal # if y1 == y2, then capsule is horizontal; \\
+    addi $s1, $t0, 0x10000          # otherwise, we must have x1 == x2, so \\
+    addi $s0, $t1, 0x1              # that the capsule is vertical
+    andi $s3, $t5, 0b00001111       # wipe entity direction information
+    ori $s3, $s3, 0b00010000        # replace with bottom
+    andi $s2, $t6, 0b00001111       # do the same for the other half capsule
+    ori $s2, $s2, 0b00000000
+    j validate_rotation             # perform the appropriate transformations \\
+  rotate_horizontal:                # to achieve the desired rotation
+    move $s0, $t0
+    addi $s1, $t1, -0x10001
+    andi $s2, $t5, 0b00001111       # wipe entity direction information
+    ori $s2, $s2, 0b00110000        # replace with bottom
+    andi $s3, $t6, 0b00001111       # do the same for the other half capsule
+    ori $s3, $s3, 0b00100000
+  validate_rotation:
+    move $a0, $s0                   # check that the positions of \\
+    jal validate                    # both capsule halves are valid; \\
+    move $s6, $v0                   # if they are, commit the changes \\
+    move $a0, $s1                   # to the player capsule
+    jal validate
+    move $s7, $v0
+
+    and $t4, $s6, $s7               # 1 if both positions are safe
+    li $v0, 0                       # set the default return value to 0
+    beq $t4, 0, keyboard_input_exit # exit if new position is invalid
+
+    sw $s0, CAPSULE_P1              # otherwise, commit the changes
+    sw $s1, CAPSULE_P2
+    sb $s2, CAPSULE_E1              # as entity direction data has been changed, \\
+    sb $s3, CAPSULE_E2              # update also the entity bytes for each half
+    j keyboard_input_exit
+  move_left:                        # shift the player controlled pill left one tile
+    li $a0, -0x00010000
+    jal displace    
+    j keyboard_input_exit
+  move_right:                       # shift the player controlled pill right one tile
+    li $a0, 0x00010000
+    jal displace
+    j keyboard_input_exit
+  accel_down:                       # accelerate downwards fall
+    lw $t0, DELTA_CAP_ACCEL
+    sw $t0, DELTA_CAP
+
+    j keyboard_input_exit
+  pause:                            # pause the game if running, or start it if paused
+    # TODO: we may choose to implement this as part if Milestone 5
+    j keyboard_input_exit
+  keyboard_input_exit:
+    lw $ra, 0($sp)                  # retrieve return address from the stack
+    addi $sp, $sp, 4
+    jr $ra                          # return to caller
+
+## Apply an input displacement to the player capsule, and return
+## whether the change in position was successful.
+# Takes in the following parameter:
+# - $a0 : the displacement to apply to the player capsule.
+# Returns:
+# - $v0 : whether the player capsule has been moved down; 1 if there
+#         was no collision, and 0 otherwise
+displace:
+    addi $sp, $sp, -4               # store the return address on the stack
+    sw $ra, 0($sp)
+
+    lw $t0, CAPSULE_P1              # load capsule information
+    lw $t1, CAPSULE_P2
+    add $s0, $t0, $a0               # shift the capsule halves' positions \\
+    add $s1, $t1, $a0               # by the input amount
+
+    move $a0, $s0                   # check that the positions of \\
+    jal validate                    # both capsule halves are valid; \\
+    move $s2, $v0                   # if they are, commit the changes \\
+    move $a0, $s1                   # to the player capsule
+    jal validate
+    move $s3, $v0
+
+    and $t4, $s2, $s3               # 1 if both positions are safe
+    li $v0, 0                       # set the default return value to 0
+    beq $t4, 0, displace_exit       # exit if new position is invalid
+
+    sw $s0, CAPSULE_P1              # otherwise, commit the changes \\
+    sw $s1, CAPSULE_P2              # and return 1
+    li $v0, 1
+  displace_exit:
+    lw $ra, 0($sp)                  # load the return address from the stack
+    addi $sp, $sp, 4
+    jr $ra
+
+## Apply an input displacement to the target entity, and return
+## whether the change in position was successful. This function resembles
+## displace, but does not operate on the requirement that more than one 
+## entity (two capsule halves) must be validated prior to moving either.
+# Takes in the following parameters:
+# - $a0 : the address of the entity position to check for modification
+# - $a1 : the displacement to apply to the player capsule.
+# Returns:
+# - $v0 : whether the player capsule has been moved down; 1 if there
+#         was no collision, and 0 otherwise
+displace_solo:
+    addi $sp, $sp, -4            # store the return address on the stack
+    sw $ra, 0($sp)
+
+    move $s0, $a0
+    lw $s1, 0($s0)
+    add $s1, $s1, $a1            # apply displacement to the entity
+
+    move $a0, $s1                # check that the positions of the \\
+    jal validate                 # etnity is valid; if it is, commit \\
+    move $s2, $v0                # the changes to the provided location \\
+
+    li $v0, 0                         # set default return value to 0
+    beq $s2, 0, displace_solo_exit    # exit if the new position is invalid
+    
+    sw $s1, 0($s0)               # otherwise, commit the changes and \\
+    li $v0, 1                    # return 1
+  displace_solo_exit:
+    lw $ra, 0($sp)               # load the return address from the stack
+    addi $sp, $sp, 4
+    jr $ra
+
 ## Draw a the current state of the game, including the backdrop,
 ## all sprites / indicators, and the contents of the bottle. If
-## CAPSULE_P1 is 0, this function does not draw the current capsule
+## CAPSULE_P1 is -1, this function does not draw the current capsule
 ## controlled by the player.
 ## This function only modifies $t registers.
 draw:
@@ -650,7 +846,7 @@ draw:
     lw $t0, CAPSULE_P1        # load information about the first half \\
     lb $t2, CAPSULE_E1        # of the player-controlled capsule
     
-    beq $t0, 0, draw_return   # if first argument is zero, do not draw \\
+    beq $t0, -1, draw_return  # if first argument is -1, do not draw \\
                               # the player capsule
     
     move $a0, $t2             # draw the first half of the player capsule
