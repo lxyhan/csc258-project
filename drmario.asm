@@ -19,13 +19,18 @@
 ##############################################################################
 ## Bitmap Assets
 ##############################################################################
-DISPLAY_BUFFER:     # space allocated to avoid overlap between bitmap region
-    .space 230000   # and .data segment in memory; DO NOT USE
+DISPLAY_REGION_BUFFER:   # space allocated to avoid overlap between bitmap region
+    .space 230000        # and .data segment in memory; DO NOT USE
 F_BACKDROP:
     .asciiz "sprites/bottle.bmp"
     .align 2
 BACKDROP:           # capsule pixel array; each pixel is 4 bytes \\
     .space 229376   # 256 * 244 * 4 = 229376
+F_BOTTLE_GRID:
+    .asciiz "sprites/grid.bmp"
+    .align 2
+BOTTLE_GRID:
+    .space 32768    # 4 * BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE ^ 2
 F_CAP_BLUE_LEFT:
     .asciiz "sprites/cap_blue_left.bmp"
     .align 2
@@ -120,7 +125,7 @@ SLEEP_TIME:         # time to sleep between frames by default
 DELTA_CAP_DEFAULT:  # time interval between gravity applications \\
     .word 1500     # by default
 DELTA_CAP_ACCEL:    # time interval between gravity applications \\
-    .word 500     # when accelerated by user input
+    .word 250     # when accelerated by user input
 ADDR_DSPL:          # address of the bitmap display
     .word 0x10008000
 ADDR_KBRD:          # address of the keyboard
@@ -132,6 +137,10 @@ ADDR_KBRD:          # address of the keyboard
 BOTTLE:             # BOTTLE_WIDTH * BOTTLE_HEIGHT * 1 byte per tile
     .space 128      # this is an array containing the contents of the bottle \\
                     # i.e. viruses and capsules that have landed
+BOTTLE_DSPL_BUF:    # buffer to draw all bottle entities and grid, \\
+    .space 32768    # which will then be drawn to the display; this \\
+                    # is used to remove flickering; we compute with \\
+                    # TILE_SIZE^2 * BOTTLE_WIDTH * BOTTLE_HEIGHT * 4 bytes per pixel
 # each byte in this array carries three pieces of information:
 # [ direction | colour | type  ]
 # [ 4 bits    | 3 bits | 1 bit ]
@@ -192,6 +201,7 @@ main:
     jal init_bmp         # initialize the bitmap
     jal generate_virus   # place initial viruses in bottle
     jal generate_capsule # generate a new capsule for the player
+    jal draw_backdrop    # draw the backdrop only once
     jal draw             # draw the state of the game before start
 
     li $v0, 30
@@ -237,10 +247,6 @@ game_loop:
     # TODO: problems:
     # 1. there's this weird keyboard buffering so that your input continues
     #    to be interpreted even after you release the key
-    # 2. there is major flickering in the display; we can reduce this
-    #    by buffering the display, and only displaying the regions that
-    #    can be modified (the grid, next pill, score board); we can also
-    #    only draw if an event occurs (processed input event/gravity/clear)
     
     li $v0, 32
     lw, $a0, SLEEP_TIME   # set the amount of time to sleep
@@ -282,6 +288,11 @@ init_bmp:
     la $a0, F_BACKDROP         # read in the backdrop pixel array; this will always be \\
     la $a1, BACKDROP           # displayed behind all other drawings
     li $a2, 229376             # 256 * 244 * 4 = 229376
+    jal load_bmp
+
+    la $a0, F_BOTTLE_GRID      # read in the playing grid pixel array; this will always be \\
+    la $a1, BOTTLE_GRID        # displayed behing the bottle entities
+    li $a2, 32768              # BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE^2 * 4
     jal load_bmp
     
     lw $s2, TILE_SIZE          # determine the number of pixels occupied by a tile sprite \\
@@ -766,6 +777,29 @@ displace_solo:
     addi $sp, $sp, 4
     jr $ra
 
+## Reload the contents of BOTTLE_GRID into BOTTLE_DSPL_BUF. This procedure
+## should be called on every frame prior to adding grid entitites to the buf.
+# Takes in no parameters.
+reset_dspl_buf:
+    la $t4, BOTTLE_GRID
+    la $t5, BOTTLE_DSPL_BUF
+    
+    li $t0, 0                    # set the loop variable
+    li $t1, 32768                # TILE_SIZE^2 * BOTTLE_HEIGHT * BOTTLE_WIDTH * 4
+  reset_dspl_buf_loop:
+    beq $t0, $t1, reset_dspl_buf_exit
+    
+    lb $t3, 0($t4)
+    sb $t3, 0($t5)
+  
+    addi $t4, $t4, 1
+    addi $t5, $t5, 1
+    addi $t0, $t0, 1
+  
+    j reset_dspl_buf_loop
+  reset_dspl_buf_exit:
+    jr $ra
+
 ## Draw a the current state of the game, including the backdrop,
 ## all sprites / indicators, and the contents of the bottle. If
 ## CAPSULE_P1 is -1, this function does not draw the current capsule
@@ -775,25 +809,22 @@ draw:
     addi $sp, $sp, -4
     sw $ra, 0($sp)           # save return address, as it will be overwritten in future calls
     
-    la $a0, BACKDROP         # draw the backdrop
-    lw $a1, DISPLAY_HEIGHT   # backdrop takes up the entire display
-    lw $a2, DISPLAY_WIDTH
-    li $a3, 0x0              # the backdrop begins at the top-left \\
-    jal draw_region          # of the display
-    
     # TODO: draw the doctor (only necessary if we choose to animate)
     # TODO: draw the score on the score board
+
+    jal reset_dspl_buf      # reset the bottle display buffer prior to decorating it \\
+                            # with the player capsule and the grid entities
     
     la $t0, BOTTLE          # we begin drawing the bottle's contents
     li $t1, 0               # introduce a loop variable y = $t1
     lw $t2, BOTTLE_HEIGHT   # y is bound above by the bottle height
-  draw_bottle_loop_y:
-    beq $t1, $t2, draw_bottle_loop_y_end   # terminate the loop once we read all rows
+  buf_bottle_loop_y:
+    beq $t1, $t2, buf_bottle_loop_y_end   # terminate the loop once we read all rows
     
     li $t3, 0               # introduce a loop variable x = $t3
     lw $t4, BOTTLE_WIDTH    # x is bound above by the bottle width
-  draw_bottle_loop_x:
-    beq $t3, $t4, draw_bottle_loop_x_end   # terminate the loop once we read this row
+  buf_bottle_loop_x:
+    beq $t3, $t4, buf_bottle_loop_x_end   # terminate the loop once we read this row
 
     lw $t6, BOTTLE_WIDTH    # load information about (x, y) from the bottle;
     mult $t6, $t1           # (x, y) information is stored at BOTTLE[x + y * BOTTLE_WIDTH] \\
@@ -802,7 +833,7 @@ draw:
     add $t6, $t6, $t0
     lb $t5, 0($t6)
     
-    beq $t5, 0, draw_bottle_sprite_end   # if there is nothing at this entry, \\
+    beq $t5, 0, buf_bottle_sprite_end   # if there is nothing at this entry, \\
                                          # skip to the next position
     
     addi $sp, $sp, -4       # save the current state of each register on the stack: \\
@@ -835,13 +866,15 @@ draw:
     lw $t0, 0($sp)
     addi $sp, $sp, 4
 
-  draw_bottle_sprite_end:
+  buf_bottle_sprite_end:
     addi $t3, $t3, 1        # increment the loop variable
-    j draw_bottle_loop_x
-  draw_bottle_loop_x_end:
+    j buf_bottle_loop_x
+  buf_bottle_loop_x_end:
     addi $t1, $t1, 1        # increment the loop variable
-    j draw_bottle_loop_y
-  draw_bottle_loop_y_end:
+    j buf_bottle_loop_y
+  buf_bottle_loop_y_end:
+
+    lw $ra, 0($sp)
     
     lw $t0, CAPSULE_P1        # load information about the first half \\
     lb $t2, CAPSULE_E1        # of the player-controlled capsule
@@ -860,19 +893,76 @@ draw:
     move $a1, $t1
     jal draw_entity
 
+    jal draw_bottle           # load all buffered content into the display
+
   draw_return:
     lw $ra, 0($sp)          # reload the return address from the stack
     addi $sp, $sp, 4
     jr $ra                  # return to the caller
 
+## Draw the game backdrop, including the bottle graphics and other statics.
+# Takes in no arguments.
+draw_backdrop:
+    addi $sp, $sp, -4        # store return address on stack
+    sw $ra, 0($sp)
+  
+    la $a0, BACKDROP         # draw the backdrop
+    lw $a1, DISPLAY_HEIGHT   # backdrop takes up the entire display
+    lw $a2, DISPLAY_WIDTH    # the backdrop begins at the top-left \\
+    li $a3, 0x0              # of the display
+
+    addi $sp, $sp, -4        # the width of the draw region is DISPLAY_WIDTH
+    lw $t0, DISPLAY_WIDTH
+    sw $t0, 0($sp)
+    addi $sp, $sp, -4
+    lw $t0, ADDR_DSPL        # draw directly on the display
+    sw $t0, 0($sp)
+    jal draw_region
+
+    lw $ra, 0($sp)           # retrieve return address from stack
+    addi $sp, $sp, 4
+    jr $ra
+
+## Draw the contents of BOTTLE_DSPL_BUF into the actual display. This 
+## simply applies the BOTTLE_OFFSET to the buffer and paints one-to-one.
+# Takes in no arguments.
+draw_bottle:
+  addi $sp, $sp, -4         # store return address on the stack
+  sw $ra, 0($sp)
+  
+  lw $t0, TILE_SIZE
+  la $a0, BOTTLE_DSPL_BUF   # address of pixel array to read from (buffer)
+  lw $a1, BOTTLE_HEIGHT     # height of region; this is HEIGHT * TILE_SIZE
+  mult $t0, $a1
+  mflo $a1
+  lw $a2, BOTTLE_WIDTH      # width of region; this is WIDTH * TILE_SIZE
+  mult $t0, $a2
+  mflo $a2
+  lw $a3, BOTTLE_OFFSET     # top-left corner of the region to draw on
+
+  addi $sp, $sp, -4         # draw region width is DISPLAY_WIDTH
+  lw $t1, DISPLAY_WIDTH
+  sw $t1, 0($sp)
+  addi $sp, $sp, -4
+  lw $t1, ADDR_DSPL         # draw directly on the display
+  sw $t1, 0($sp)
+  jal draw_region
+
+  lw $ra, 0($sp)            # retrieve return address from stack
+  addi $sp, $sp, 4
+  jr $ra
+
 ## Draw the entity (either a capsule half or a virus) with the given
 ## entity byte, containing [ direction | colour | type ] information,
-## on the bottle grid at the specified location.
+## on the bottle grid BUFFER (not display) at the specified location.
 # Takes in the following parameters:
 # - $a0 : the entity byte for the entity to be drawn
 # - $a1 : the (x, y) coordinate, in terms of tiles, of the entity;
 #         this should be in format (x, y) = ($a1[31:16], $a1[15:0]) 
 draw_entity:
+    addi $sp, $sp, -4       # store the return address on the stack
+    sw $ra, 0($sp)
+    
                             # extract the data from the entity byte:
     andi $t7, $a0, 0x0f     # load the lower 4 bits of the entity: [colour | type]
     andi $t8, $a0, 0xf0     # load the upper 4 bits of the entity: [direction]
@@ -880,12 +970,10 @@ draw_entity:
 
     move $t1, $a1
     lw $t0, TILE_SIZE       # each entry in the bottle is one tile, which has dimension \\
-    mult $t1, $t0           # TILE_SIZE; add this to the offset to determine the global \\
-    mflo $t1                # position: global position = 8(x, y) + BOTTLE_OFFSET
-    lw $t5, BOTTLE_OFFSET
-    add $t1, $t1, $t5
+    mult $t1, $t0           # TILE_SIZE; thus, to determine the position in the buffer \\
+    mflo $t1                # we simply compute 8(x, y)
     
-    # determine the array offset (TILE_SIZE * TILE_SIZE * 4 * t5)
+    # determine the array offset (TILE_SIZE * TILE_SIZE * 4 * t8)
     lw $t9, TILE_SIZE       # determine the offset of the pixel array at which to \\
     mult $t9, $t9           # begin drawing -- this is useful for the capsule \\
     mflo $t9                # pixel arrays, which contain 5 sequences of 256 bytes \\
@@ -926,14 +1014,19 @@ draw_entity:
     add $a0, $a0, $t9
   draw_entity_switch_end:
 
-    addi $sp, $sp, -4      # save return address, as this will be overwritten in \\
-    sw $ra, 0($sp)         # the next jal instruction
-    
+    addi $sp, $sp, -4      # set draw region width to BOTTLE_WIDTH * TILE_SIZE
+    lw $t0, BOTTLE_WIDTH   # and load onto stack
+    lw $t1, TILE_SIZE
+    mult $t0, $t1
+    mflo $t0
+    sw $t0, 0($sp)
+    la $t0, BOTTLE_DSPL_BUF
+    addi $sp, $sp, -4      # set draw_region to draw on the buffered region \\
+    sw $t0, 0($sp)         # instead of the actual display
     jal draw_region        # call to draw the entity
     
-    lw $ra, 0($sp)
+    lw $ra, 0($sp)         # retrieve the return address from the stack
     addi $sp, $sp, 4
-
     jr $ra
 
 ## Draw a pixel array with given width and height, positioned at a
@@ -941,13 +1034,18 @@ draw_entity:
 ## This function only modifies $t registers.
 # Takes in the following parameters:
 # - $a0 : address of pixel array to read from
-# - $a1 : height of region to draw on
-# - $a2 : width of region to draw on
+# - $a1 : height of region to draw on, in pixels
+# - $a2 : width of region to draw on, in pixels
 # - $a3 : top-left corner of the region to draw on; this
 #         should be in format (x0, y0) = ($a3[7:4], $a3[3:0]);
 #         here, (x, y) is a pixel, not tile, coordinate
+# - 0($sp) : the address of the region to draw on
+# - 4($sp) : the width of the region to draw on, in pixels
 draw_region:
-    lw $t0, ADDR_DSPL           # begin working with display region
+    lw $t0, 0($sp)              # begin working with drawing region
+    addi $sp, $sp, 4
+    lw $t7, 0($sp)              # load drawing region width
+    addi $sp, $sp, 4
     andi $t8, $a3, 0x0000ffff   # $t8 = y0 = $a3[15:0]
     andi $t9, $a3, 0xffff0000   # $t9 = x0 = $a3[31:16]
     srl $t9, $t9, 16
@@ -960,6 +1058,7 @@ draw_region:
   draw_region_loop_x:
     bge $t2, $a2, draw_region_loop_x_end   # terminate the loop once we read this row
 
+    # compute the offset in the pixel array we read from
     mult $t1, $a2      # assume only the lower bits will be significant: this is \\
     mflo $t3           # a safe assumption to make in our context
     add $t3, $t3, $t2  # $t3 = (y * width + x) * 4
@@ -967,13 +1066,13 @@ draw_region:
     
     add $t6, $a0, $t3
     lw $t4, 0($t6)              # retrieve the pixel at the (x, y) offset position
-    andi $t5, $t4, 0xff000000                   # look at pixel transparency: if it is transparent \\
-    beq $t5, $zero, draw_non_transparent_exit   # do not draw the pixel
+    beq $t4, $zero, draw_non_transparent_exit   # if pixel is empty, it will be \\
+                                                # rendered black, which we do not want; \\
+                                                # instead, we do not draw it at all
     andi $t4, $t4, 0x00ffffff   # remove alpha-value, as it is not used
     
-    lw $t5, DISPLAY_WIDTH       # retrieve display width: used in computing which \\
-    add $t3, $t1, $t8           # pixel in the display to update
-    mult $t3, $t5               # $t3 = ((y + y0) * width + (x + x0)) * 4
+    add $t3, $t1, $t8           # determine pixel in the display to update
+    mult $t3, $t7               # $t3 = ((y + y0) * width + (x + x0)) * 4
     mflo $t3                    # we apply the same reasoning as above
     add $t3, $t3, $t2
     add $t3, $t3, $t9
