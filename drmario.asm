@@ -123,13 +123,15 @@ VIRUS_YLIM:         # greatest height from the bottom of the bottle
 SLEEP_TIME:         # time to sleep between frames by default
     .word 16
 DELTA_CAP_DEFAULT:  # time interval between gravity applications \\
-    .word 1500     # by default
+    .word 1000     # by default
 DELTA_CAP_ACCEL:    # time interval between gravity applications \\
-    .word 250     # when accelerated by user input
+    .word 180     # when accelerated by user input
 ADDR_DSPL:          # address of the bitmap display
     .word 0x10008000
-ADDR_KBRD:          # address of the keyboard
+ADDR_KBRD:          # address of the keyboard; queue of key presses
     .word 0xffff0000
+ADDR_KBRD_HOLD:     # address of the keyboard for key hold -- offset by \\
+    .word 0xffff0080   # n to see if the ascii character n is held
 
 ##############################################################################
 # Mutable Data
@@ -209,50 +211,6 @@ main:
     sw $a0, TIMESTAMP    # load system time as first timestamp
 
     j game_loop          # begin the main game loop
-
-## The main game loop. This runs indefinitely once the game state
-## is initialized by the main function.
-# This function takes no arguments.
-game_loop:
-    lw $t0, DELTA_CAP_DEFAULT   # set the sleep time to the default amount; \\
-    sw $t0, DELTA_CAP           # this may be modified on downward key press
-  
-    # 1a. Check if key has been pressed
-    lw $t0, ADDR_KBRD                  # $t0 = base address for keyboard
-    lw $t8, 0($t0)                     # load first word from keyboard
-    beq $t8, 0, after_keyboard_input   # if first word 1, key is pressed; \\
-    jal keyboard_input                 # otherwise, skip input processing
-    
-  after_keyboard_input:
-    li $v0, 30
-    syscall                 # load system time into ($a1, $a0)
-    move $t1, $a0           # determine current timestamp
-    lw $t2, TIMESTAMP       # determine previous timestamp
-    
-    subu $t3, $t1, $t2      # compute time elapsed
-    lw $t0, DELTA
-    add $t0, $t0, $t3       # add time elapsed to delta
-    sw $t0, DELTA           # update delta
-    sw $t1, TIMESTAMP       # update timestamp
-
-    lw $t5, DELTA_CAP
-    blt $t0, $t5, after_gravity   # if delta < delta_cap, continue; \\
-    sub $t0, $t0, $t5             # otherwise, decrease delta by \\
-    sw $t0, DELTA                 # its upper limit DELTA_CAP \\
-    li $a0, 0x1
-    jal displace
-  after_gravity:
-    jal draw                # draw the frame after all events are handled
-
-    # TODO: problems:
-    # 1. there's this weird keyboard buffering so that your input continues
-    #    to be interpreted even after you release the key
-    
-    li $v0, 32
-    lw, $a0, SLEEP_TIME   # set the amount of time to sleep
-    syscall               # sleep until the next frame     
-
-    j game_loop           # return to the beginning of the loop
 
 ## Exit the program gracefully.
 exit:
@@ -586,6 +544,140 @@ generate_capsule:
     addi $sp, $sp, 4       # the stack, and return to the caller
     jr $ra
 
+## The main game loop. This runs indefinitely once the game state
+## is initialized by the main function.
+# This function takes no arguments.
+game_loop:
+    lw $t0, DELTA_CAP_DEFAULT   # set the sleep time to the default amount; \\
+    sw $t0, DELTA_CAP           # this may be modified on downward key press
+  
+    # 1a. Check if key has been pressed
+    jal keyboard_input                 # otherwise, skip input processing
+    
+  after_keyboard_input:
+    lw $t0, DELTA
+    lw $t5, DELTA_CAP
+    blt $t0, $t5, after_gravity   # if delta < delta_cap, continue; \\
+    sub $t0, $t0, $t5             # otherwise, decrease delta by \\
+    li $a0, 0x1                   # its upper limit DELTA_CAP \\
+
+    jal displace
+  after_gravity:
+    li $v0, 30
+    syscall                 # load system time into ($a1, $a0)
+    move $t1, $a0           # determine current timestamp
+    lw $t2, TIMESTAMP       # determine previous timestamp
+    
+    subu $t3, $t1, $t2      # compute time elapsed
+    add $t0, $t0, $t3       # add time elapsed to delta
+    sw $t0, DELTA           # update delta
+    sw $t1, TIMESTAMP       # update timestamp
+    
+    jal draw                # draw the frame after all events are handled
+    
+    li $v0, 32
+    lw, $a0, SLEEP_TIME   # set the amount of time to sleep
+    syscall               # sleep until the next frame     
+
+    j game_loop           # return to the beginning of the loop
+
+## Handle keyboard input. Will verify that input is recieved, and 
+## otherwise do nothing.
+# This function takes in no arguments.
+keyboard_input:
+    addi $sp, $sp, -4               # save the return address
+    sw $ra, 0($sp)
+    lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
+    lw $t8, 0($t0)                  # load first word from keyboard
+    lw $t1, 4($t0)                  # load the key pressed
+    lw $t2, ADDR_KBRD_HOLD          # the start of keypress array
+
+    # We use keypresses for triggers that the player will likely \\
+    # only want to do once, and require more precision, such as such \\
+    # as quit, pause, and rotate. These will be registered even if the \\
+    # player is not pressing at the moment of the check due to queuing,
+    # so we must also check that the key is actively being held. \\
+    # Furthermore, there is a delay between the first press and the \\
+    # repeating presses triggered afterwards by holding the key, making \
+    # this resolution suboptimal for events the player will want to \\
+    # trigger more than once in succession, such as downwards acceleration. \\
+    # For these, we use keyhold triggers instead of keypress triggers.
+
+    beq $t8, 0, keyhold_check            # if keypress is not triggered, \\
+                                         # check only for keyhold signals
+    # keyhold is always triggered when keypress is triggered but the converse \\
+    # need not be true; to ensure that user input is only handled when the \\
+    # input is actively being provided (so that buffering does not occur due \\
+    # to queuing of keypresses), we require that keypress AND keyhold are triggered.
+    # why even check for keypress then? because keypress will have a buffer time \\
+    # between the first trigger and successive triggers. try pressing and holding \\
+    # `a` in a textbox to see what this is referring to!
+    addi $t3, $t2, 0x71
+    lb $t3, 0($t3)                       # check that q is held
+    seq $t4, $t1, 0x71                   # check that q is pressed
+    and $t5, $t3, $t4                    # 1 if both conditions hold
+    beq $t5, 1, exit                     # exit if q was pressed
+    
+    addi $t3, $t2, 0x70
+    lb $t3, 0($t3)                       # check that p is held
+    seq $t4, $t1, 0x70                   # check that p is pressed
+    and $t5, $t3, $t4                    # 1 if both conditions hold
+    beq $t5, 1, trig_pause               # pause if p was pressed
+
+    addi $t3, $t2, 0x77
+    lb $t3, 0($t3)                       # check that w is held
+    seq $t4, $t1, 0x77                   # check that w is pressed
+    and $t5, $t3, $t4                    # 1 if both conditions hold
+    beq $t5, 1, trig_rotate           # rotate CCW if w was pressed
+
+    addi $t3, $t2, 0x61
+    lb $t3, 0($t3)                       # check that a is held
+    seq $t4, $t1, 0x61                   # check that a is pressed
+    and $t5, $t3, $t4                    # 1 if both conditions hold
+    beq $t5, 1, trig_move_left        # move left if a was pressed
+
+    addi $t3, $t2, 0x64
+    lb $t3, 0($t3)                       # check that d is held
+    seq $t4, $t1, 0x64                   # check that d is pressed
+    and $t5, $t3, $t4                    # 1 if both conditions hold
+    beq $t5, 1, trig_move_right       # move right if d was pressed
+
+  keyhold_check:                         # even if ADDR_KBRD doesn't signal \\
+    addi $t3, $t2, 0x73                  # sequence may have started: check \\
+    lb $t3, 0($t3)                       # and handle this possibility.
+    beq $t3, 1, trig_accel_down          # accelerate down if s was pressed
+
+    j keyboard_input_exit                # if key is unrecognized, ignore it
+
+  trig_rotate:                           # rotate the player controlled pill CCw
+    jal rotate_capsule
+    j keyboard_input_exit
+  trig_move_left:                        # shift the player controlled pill left one tile
+    li $a0, -0x00010000
+    jal displace    
+    j keyboard_input_exit
+  trig_move_right:                       # shift the player controlled pill right one tile
+    li $a0, 0x00010000
+    jal displace
+    j keyboard_input_exit
+  trig_accel_down:                       # accelerate downwards fall
+    lw $t0, DELTA_CAP_ACCEL
+    sw $t0, DELTA_CAP
+    sw $t0, DELTA
+    # TODO: ONLY UPDATE DELTA IF DELTA_CAP != DELTA_CAP_ACCEL
+    li $v0, 1
+    li $a0, 1
+    syscall
+
+    j keyboard_input_exit
+  trig_pause:                            # pause the game if running, or start it if paused
+    # TODO: we may choose to implement this as part of Milestone 5
+    j keyboard_input_exit
+  keyboard_input_exit:
+    lw $ra, 0($sp)                  # retrieve return address from the stack
+    addi $sp, $sp, 4
+    jr $ra                          # return to caller
+
 ## Validate the position of a given entity. This function checks that
 ## the entity does not collide with any entity currently in the
 ## BOTTLE array, and verifies that it does not fall outside the bounds
@@ -631,25 +723,13 @@ validate:
   validate_exit:
     jr $ra
 
-## Handle keyboard input. This function assumes that keyboard input 
-## has been provided, and omits the check.
-# This function takes in no arguments.
-keyboard_input:
-    addi $sp, $sp, -4               # save the return address
+## Rotate the player capsule if possible. If a collision
+## occurs during the rotation, return to original position.
+# Takes in no parameter.
+rotate_capsule:
+    addi $sp, $sp, -4               # store return address in stack
     sw $ra, 0($sp)
   
-    lw $t0, ADDR_KBRD               # load the keyboard base address
-    lw $t1, 4($t0)                  # load the key pressed
-    
-    beq $t1, 0x71, exit             # exit if q was pressed
-    beq $t1, 0x70, pause            # pause if p was pressed
-    beq $t1, 0x73, accel_down       # move right if s was pressed
-    beq $t1, 0x77, rotate           # rotate CCW if w was pressed
-    beq $t1, 0x61, move_left        # move left if a was pressed
-    beq $t1, 0x64, move_right       # move right if d was pressed
-
-  rotate:                           # rotate the player controlled pill CCw
-    # TODO: maybe extract this into a function of its own
     lw $t0, CAPSULE_P1              # load capsule information
     lw $t1, CAPSULE_P2
     andi $t2, $t0, 0xffff           # extract the y components of each \\
@@ -661,9 +741,9 @@ keyboard_input:
     addi $s1, $t0, 0x10000          # otherwise, we must have x1 == x2, so \\
     addi $s0, $t1, 0x1              # that the capsule is vertical
     andi $s3, $t5, 0b00001111       # wipe entity direction information
-    ori $s3, $s3, 0b00010000        # replace with bottom
+    ori $s3, $s3, 0b00010000        # replace with right
     andi $s2, $t6, 0b00001111       # do the same for the other half capsule
-    ori $s2, $s2, 0b00000000
+    ori $s2, $s2, 0b00000000        # replace with left
     j validate_rotation             # perform the appropriate transformations \\
   rotate_horizontal:                # to achieve the desired rotation
     move $s0, $t0
@@ -671,7 +751,7 @@ keyboard_input:
     andi $s2, $t5, 0b00001111       # wipe entity direction information
     ori $s2, $s2, 0b00110000        # replace with bottom
     andi $s3, $t6, 0b00001111       # do the same for the other half capsule
-    ori $s3, $s3, 0b00100000
+    ori $s3, $s3, 0b00100000        # replace with top
   validate_rotation:
     move $a0, $s0                   # check that the positions of \\
     jal validate                    # both capsule halves are valid; \\
@@ -682,33 +762,16 @@ keyboard_input:
 
     and $t4, $s6, $s7               # 1 if both positions are safe
     li $v0, 0                       # set the default return value to 0
-    beq $t4, 0, keyboard_input_exit # exit if new position is invalid
+    beq $t4, 0, rotate_capsule_exit # exit if new position is invalid
 
     sw $s0, CAPSULE_P1              # otherwise, commit the changes
     sw $s1, CAPSULE_P2
     sb $s2, CAPSULE_E1              # as entity direction data has been changed, \\
     sb $s3, CAPSULE_E2              # update also the entity bytes for each half
-    j keyboard_input_exit
-  move_left:                        # shift the player controlled pill left one tile
-    li $a0, -0x00010000
-    jal displace    
-    j keyboard_input_exit
-  move_right:                       # shift the player controlled pill right one tile
-    li $a0, 0x00010000
-    jal displace
-    j keyboard_input_exit
-  accel_down:                       # accelerate downwards fall
-    lw $t0, DELTA_CAP_ACCEL
-    sw $t0, DELTA_CAP
-
-    j keyboard_input_exit
-  pause:                            # pause the game if running, or start it if paused
-    # TODO: we may choose to implement this as part if Milestone 5
-    j keyboard_input_exit
-  keyboard_input_exit:
-    lw $ra, 0($sp)                  # retrieve return address from the stack
+  rotate_capsule_exit:
+    lw $ra, 0($sp)                  # retrieve return address from stack
     addi $sp, $sp, 4
-    jr $ra                          # return to caller
+    jr $ra
 
 ## Apply an input displacement to the player capsule, and return
 ## whether the change in position was successful.
