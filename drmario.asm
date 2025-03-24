@@ -183,7 +183,10 @@ DELTA:              # time since last gravity application
     .word 0
 TIMESTAMP:          # the last time measured on the most recent time syscall
     .space 4
-    
+
+VIRUS_COUNT:        # the number of viruses remaining on the bottle grid
+    .word 4
+
 GARBAGE:
     .space 32
 BITMAP_OFFSET:
@@ -551,28 +554,29 @@ game_loop:
     lw $t0, DELTA_CAP_DEFAULT   # set the sleep time to the default amount; \\
     sw $t0, DELTA_CAP           # this may be modified on downward key press
   
-    # 1a. Check if key has been pressed
-    jal keyboard_input                 # otherwise, skip input processing
+    jal keyboard_input          # check for user input (keypresses / keyholds)
     
   after_keyboard_input:
-    lw $t0, DELTA
-    lw $t5, DELTA_CAP
-    blt $t0, $t5, after_gravity   # if delta < delta_cap, continue; \\
-    sub $t0, $t0, $t5             # otherwise, decrease delta by \\
-    li $a0, 0x1                   # its upper limit DELTA_CAP \\
-
-    jal displace
-  after_gravity:
     li $v0, 30
     syscall                 # load system time into ($a1, $a0)
     move $t1, $a0           # determine current timestamp
     lw $t2, TIMESTAMP       # determine previous timestamp
     
+    lw $t0, DELTA
     subu $t3, $t1, $t2      # compute time elapsed
     add $t0, $t0, $t3       # add time elapsed to delta
     sw $t0, DELTA           # update delta
     sw $t1, TIMESTAMP       # update timestamp
     
+    lw $t5, DELTA_CAP
+    blt $t0, $t5, after_gravity   # if delta < delta_cap, continue; \\
+    sub $t0, $t0, $t5             # otherwise, decrease delta by \\
+                                  # its upper limit DELTA_CAP \\
+    sw $t0, DELTA                 # update this reduced delta value
+    li $a0, 0x1
+    jal displace                  # displace the capsule y-pos by 1
+    
+  after_gravity:
     jal draw                # draw the frame after all events are handled
     
     li $v0, 32
@@ -661,13 +665,12 @@ keyboard_input:
     jal displace
     j keyboard_input_exit
   trig_accel_down:                       # accelerate downwards fall
-    lw $t0, DELTA_CAP_ACCEL
-    sw $t0, DELTA_CAP
-    sw $t0, DELTA
-    # TODO: ONLY UPDATE DELTA IF DELTA_CAP != DELTA_CAP_ACCEL
-    li $v0, 1
-    li $a0, 1
-    syscall
+    lw $t1, DELTA_CAP                    # load previous delta capacity
+    lw $t0, DELTA_CAP_ACCEL              # load delta value capacity when accelerating
+    beq $t0, $t1, keyboard_input_exit    # if these two values are not already equal \\
+                                         # this is the start of the faster fall;
+    sw $t0, DELTA_CAP                    # set delta value capacity to the accelerated val
+    sw $t0, DELTA                        # set the delta value to the capacity to immediately fall
 
     j keyboard_input_exit
   trig_pause:                            # pause the game if running, or start it if paused
