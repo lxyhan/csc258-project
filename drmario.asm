@@ -26,10 +26,10 @@ F_BACKDROP:
     .align 2
 BACKDROP:           # capsule pixel array; each pixel is 4 bytes \\
     .space 229376   # 256 * 244 * 4 = 229376
-F_BOTTLE_GRID:
+F_BOTTLE_GRID_IMG:
     .asciiz "sprites/grid.bmp"
     .align 2
-BOTTLE_GRID:
+BOTTLE_GRID_IMG:
     .space 32768    # 4 * BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE ^ 2
 F_CAP_BLUE_LEFT:
     .asciiz "sprites/cap_blue_left.bmp"
@@ -251,8 +251,8 @@ init_bmp:
     li $a2, 229376             # 256 * 244 * 4 = 229376
     jal load_bmp
 
-    la $a0, F_BOTTLE_GRID      # read in the playing grid pixel array; this will always be \\
-    la $a1, BOTTLE_GRID        # displayed behing the bottle entities
+    la $a0, F_BOTTLE_GRID_IMG  # read in the playing grid pixel array; this will always be \\
+    la $a1, BOTTLE_GRID_IMG    # displayed behing the bottle entities
     li $a2, 32768              # BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE^2 * 4
     jal load_bmp
     
@@ -442,6 +442,29 @@ generate_colour:
     sllv $v0, $t1, $a0   # this is our return value
     jr $ra               # return to caller
 
+## Place the provided entity byte at the provided coordinate in
+## the BOTTLE array. This function *does not check* that the
+## region in the array is currently unoccupied!
+# Takes in the following parameters:
+# - $a0 : the position, in tile coordinates, to check for a collision;
+#          this should be in format (x, y) = ($a0[31:16], $a0[15:0]) 
+# - $a0 : the entity byte to store at the given coordinate; this has
+#         format described for BOTTLE entities : [ dir | col | type ]
+commit_to_bottle:
+    lw $t0, BOTTLE_WIDTH
+    andi $t2, $a0, 0x0000ffff     # extract first half y position
+    andi $t3, $a0, 0xffff0000     # extract first half x position
+    srl $t3, $t3, 16
+    mult $t0, $t2                 # compute the position in the array
+    mflo $t4                      # at which to place the entity byte:
+    add $t4, $t4, $t3             # pos = y * WIDTH + x
+    
+    la $t9, BOTTLE
+    add $t9, $t9, $t4
+    sb $a1, 0($t9)                # store byte at the calculated position
+
+    jr $ra
+
 ## Generate VIRUS_COUNT viruses on the bottle grid.
 # This function takes no arguments.
 generate_virus:
@@ -466,6 +489,12 @@ generate_virus:
                            # for y = 16, which we cannot have; \\
                            # store this as our randomized y pos
 
+    # NOTE: the following is equivalent to calling validate, then
+    # commit_to_bottle. However, calling those procedures involves
+    # packaging data in the right format, which the procedures then
+    # unpackage themselves. This ultimately leads to more instructions
+    # processed for little to no reason (save for the readability that
+    # this note hopes to account for)
     la $t4, BOTTLE         # check that the randomized position, \\
     lw $t5, BOTTLE_WIDTH   # at index y * BOTTLE_WIDTH + x since \\
     mult $t3, $t5          # each entry occupies only 1 byte, \\
@@ -512,6 +541,8 @@ generate_virus:
 #         occurs if the capsule init position is already occupied
 #         by some other entity, and should be used to trigger Game Over.
 generate_capsule:
+    li $s7, 0              # the default return value is 0
+  
     lw $t0, BOTTLE_WIDTH   # the capsule is positioned in the middle \\
     sra $t0, $t0, 1        # of the top row, so compute the halfway \\
     sll $t2, $t0, 16       # point of the bottle grid for the x \\
@@ -529,8 +560,18 @@ generate_capsule:
     sw $ra, 0($sp)         # function in the stack prior to making other
                            # function calls
 
-    # TODO: validate these two positions: return 0 if invalid!
+    lw $a0, CAPSULE_P2     # validate the position of the new capsule; \\
+    jal validate           # if it is colliding with something, \\
+    move $s0, $v0          # we cannot spawn it, meaning the player has \\ 
+    lw $a0, CAPSULE_P1     # flooded the bottle; the game is lost
+    jal validate
+    move $s1, $v0
+    and $s0, $s0, $s1      # can only spawn if neither validation fails
+    beq $s0, 0, generate_capsule_exit
 
+    li $s7, 1              # if we reach this point, the position is valid, \\
+                           # and capsule generation has succeeded
+    
     jal generate_colour        # generate a colour for the first capsule \\
     move $t0, $v0              # half, and shift left by one to align with \\
     sll $t0, $t0, 1            # the expected formatting (colour data ends \\
@@ -542,7 +583,9 @@ generate_capsule:
     sll $t0, $t0, 1            # same procedure as the first capsule half
     ori $t0, $t0, 0b00010001
     sb $t0, CAPSULE_E2
-    
+
+  generate_capsule_exit:
+    move $v0, $s7          # shift the return value into the correct register
     lw $ra, 0($sp)         # retrieve the return address stored on \\
     addi $sp, $sp, 4       # the stack, and return to the caller
     jr $ra
@@ -575,6 +618,25 @@ game_loop:
     sw $t0, DELTA                 # update this reduced delta value
     li $a0, 0x1
     jal displace                  # displace the capsule y-pos by 1
+
+    beq $v0, 1, after_gravity     # if no collision occurred, return to \\
+                                  # business as usual; otherwise...
+
+    lw $a0, CAPSULE_P1            # commit the contents of the capsule \\
+    lb $a1, CAPSULE_E1            # to the BOTTLE array
+    jal commit_to_bottle
+    
+    lw $a0, CAPSULE_P2
+    lb $a1, CAPSULE_E2
+    jal commit_to_bottle
+    
+    # TODO: add checks for clears and cascading
+    
+    lw $t0, VIRUS_COUNT
+    beq $t0, 0, exit        # if there are no more viruses, the game is won
+
+    jal generate_capsule
+    beq $v0, 0, exit        # if the capsule fails to generate, it is game over
     
   after_gravity:
     jal draw                # draw the frame after all events are handled
@@ -691,7 +753,7 @@ keyboard_input:
 #          this should be in format (x, y) = ($a0[31:16], $a0[15:0]) 
 # and returns:
 # - $v0 : whether a collision occurs; 1 if there is no collision;
-#         1 if there is a collision
+#         0 if there is a collision
 validate: 
     # check that the entity is in bounds
     lw $t0, BOTTLE_WIDTH        # load in the bottle grid dimensions
@@ -847,7 +909,7 @@ displace_solo:
 ## should be called on every frame prior to adding grid entitites to the buf.
 # Takes in no parameters.
 reset_dspl_buf:
-    la $t4, BOTTLE_GRID
+    la $t4, BOTTLE_GRID_IMG
     la $t5, BOTTLE_DSPL_BUF
     
     li $t0, 0                    # set the loop variable
