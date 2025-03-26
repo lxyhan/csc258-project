@@ -1,8 +1,8 @@
 ######################## CSC258 Assembly Final Project #######################
 # This file contains our implementation of Dr Mario.
 #
-# Student 1: Name, Student Number
-# Student 2: Name, Student Number (if applicable)
+# Student 1: Stefan Barna, 1010257758
+# Student 2: James Han, 
 #
 # We assert that the code submitted here is entirely our own 
 # creation, and will indicate otherwise when it is not.
