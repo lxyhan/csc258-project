@@ -78,7 +78,7 @@ F_CAP_RED_CENTRE:
     .align 2
 CAP_BLUE:         # capsule pixel array; each pixel is 4 bytes \\
     .space 1280   # 256 * 5 = 1280; we store the bitmap in order \\
-CAP_GREEN:       # [left, right, up, down, centre]
+CAP_GREEN:        # [left, right, up, down, centre]
     .space 1280
 CAP_RED:
     .space 1280
@@ -191,6 +191,19 @@ GARBAGE:
     .space 32
 BITMAP_OFFSET:
     .space 4
+
+##############################################################################
+# Stack Macros
+##############################################################################
+.macro push (%reg)
+    addi $sp, $sp, -4
+    sw %reg, 0($sp)
+.end_macro
+
+.macro pop (%reg)
+    lw %reg, 0($sp)
+    addi $sp, $sp, 4
+.end_macro
 
 ##############################################################################
 # Code
@@ -468,6 +481,8 @@ commit_to_bottle:
 ## Generate VIRUS_COUNT viruses on the bottle grid.
 # This function takes no arguments.
 generate_virus:
+    push ($ra)          # save return address on stack
+
     li $t0, 0           # introduce a loop variable $t0
     lw $t1, VIRUS_CAP   # bound loop variable by $t1
   generate_virus_loop:                  # exit loop once we have \\
@@ -504,25 +519,17 @@ generate_virus:
     lb $t6, 0($t4)
     bne $t6, $zero, generate_virus_loop
 
-    addi $sp, $sp, -4      # generate a new colour for this virus; \\
-    sw $t0, 0($sp)         # as this makes a function call, we \\
-    addi $sp, $sp, -4      # must store the return address and \\
-    sw $t1, 0($sp)         # any data that we need to persist \\
-    addi $sp, $sp, -4      # in the stack
-    sw $t4, 0($sp)
-    addi $sp, $sp, -4
-    sw $ra, 0($sp)
+    push ($t0)             # generate a new colour for this virus; \\
+    push ($t1)             # as this makes a function call, we \\
+    push ($t4)             # must store the return address and \\
+                           # any data that we need to persist \\
+                           # in the stack
     
     jal generate_colour
-
-    lw $ra, 0($sp)         # load data from the stack
-    addi $sp, $sp, 4
-    lw $t4, 0($sp)
-    addi $sp, $sp, 4
-    lw $t1, 0($sp)
-    addi $sp, $sp, 4
-    lw $t0, 0($sp)
-    addi $sp, $sp, 4
+ 
+    pop ($t4)              # retrieve data from the stack
+    pop ($t1)
+    pop ($t0)
 
     sll $v0, $v0, 1        # we want entry to have form \\
     sb $v0, 0($t4)         # [ 0000 | colour | 0 ] for a coloured \\
@@ -531,6 +538,7 @@ generate_virus:
     addi, $t0, $t0, 1      # only increment if a virus was \\
     j generate_virus_loop  # successfully generated
   generate_virus_exit:
+    pop ($ra)              # retrieve return address from stack
     jr $ra
 
 ## Generate a new player capsule and load its information into.
@@ -556,8 +564,8 @@ generate_capsule:
     sll $t1, $t1, 16       # so the first half is always to the left
     sw $t1, CAPSULE_P1
     
-    addi $sp, $sp, -4      # store the return address for the current \\
-    sw $ra, 0($sp)         # function in the stack prior to making other
+    push ($ra)             # store the return address for the current \\
+                           # function in the stack prior to making other
                            # function calls
 
     lw $a0, CAPSULE_P2     # validate the position of the new capsule; \\
@@ -586,9 +594,8 @@ generate_capsule:
 
   generate_capsule_exit:
     move $v0, $s7          # shift the return value into the correct register
-    lw $ra, 0($sp)         # retrieve the return address stored on \\
-    addi $sp, $sp, 4       # the stack, and return to the caller
-    jr $ra
+    pop ($ra)              # retrieve the return address stored on \\
+    jr $ra                 # the stack, and return to the caller
 
 ## The main game loop. This runs indefinitely once the game state
 ## is initialized by the main function.
@@ -651,8 +658,7 @@ game_loop:
 ## otherwise do nothing.
 # This function takes in no arguments.
 keyboard_input:
-    addi $sp, $sp, -4               # save the return address
-    sw $ra, 0($sp)
+    push ($ra)                      # save the return address
     lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
     lw $t8, 0($t0)                  # load first word from keyboard
     lw $t1, 4($t0)                  # load the key pressed
@@ -739,8 +745,7 @@ keyboard_input:
     # TODO: we may choose to implement this as part of Milestone 5
     j keyboard_input_exit
   keyboard_input_exit:
-    lw $ra, 0($sp)                  # retrieve return address from the stack
-    addi $sp, $sp, 4
+    pop ($ra)                       # retrieve return address from the stack
     jr $ra                          # return to caller
 
 ## Validate the position of a given entity. This function checks that
@@ -792,8 +797,7 @@ validate:
 ## occurs during the rotation, return to original position.
 # Takes in no parameter.
 rotate_capsule:
-    addi $sp, $sp, -4               # store return address in stack
-    sw $ra, 0($sp)
+    push ($ra)                      # store return address on stack
   
     lw $t0, CAPSULE_P1              # load capsule information
     lw $t1, CAPSULE_P2
@@ -834,8 +838,7 @@ rotate_capsule:
     sb $s2, CAPSULE_E1              # as entity direction data has been changed, \\
     sb $s3, CAPSULE_E2              # update also the entity bytes for each half
   rotate_capsule_exit:
-    lw $ra, 0($sp)                  # retrieve return address from stack
-    addi $sp, $sp, 4
+    pop ($ra)                       # retrieve return address from stack
     jr $ra
 
 ## Apply an input displacement to the player capsule, and return
@@ -846,8 +849,7 @@ rotate_capsule:
 # - $v0 : whether the player capsule has been moved down; 1 if there
 #         was no collision, and 0 otherwise
 displace:
-    addi $sp, $sp, -4               # store the return address on the stack
-    sw $ra, 0($sp)
+    push ($ra)                      # store the return address on the stack
 
     lw $t0, CAPSULE_P1              # load capsule information
     lw $t1, CAPSULE_P2
@@ -869,8 +871,7 @@ displace:
     sw $s1, CAPSULE_P2              # and return 1
     li $v0, 1
   displace_exit:
-    lw $ra, 0($sp)                  # load the return address from the stack
-    addi $sp, $sp, 4
+    pop ($ra)                       # load the return address from the stack
     jr $ra
 
 ## Apply an input displacement to the target entity, and return
@@ -884,8 +885,7 @@ displace:
 # - $v0 : whether the player capsule has been moved down; 1 if there
 #         was no collision, and 0 otherwise
 displace_solo:
-    addi $sp, $sp, -4            # store the return address on the stack
-    sw $ra, 0($sp)
+    push ($ra)                   # store the return address on the stack
 
     move $s0, $a0
     lw $s1, 0($s0)
@@ -901,8 +901,7 @@ displace_solo:
     sw $s1, 0($s0)               # otherwise, commit the changes and \\
     li $v0, 1                    # return 1
   displace_solo_exit:
-    lw $ra, 0($sp)               # load the return address from the stack
-    addi $sp, $sp, 4
+    pop ($ra)                    # load the return address from the stack
     jr $ra
 
 ## Reload the contents of BOTTLE_GRID into BOTTLE_DSPL_BUF. This procedure
@@ -934,8 +933,7 @@ reset_dspl_buf:
 ## controlled by the player.
 ## This function only modifies $t registers.
 draw:
-    addi $sp, $sp, -4
-    sw $ra, 0($sp)           # save return address, as it will be overwritten in future calls
+    push ($ra)               # save return address, as it will be overwritten in future calls
     
     # TODO: draw the doctor (only necessary if we choose to animate)
     # TODO: draw the score on the score board
@@ -962,18 +960,13 @@ draw:
     lb $t5, 0($t6)
     
     beq $t5, 0, buf_bottle_sprite_end   # if there is nothing at this entry, \\
-                                         # skip to the next position
+                                        # skip to the next position
     
-    addi $sp, $sp, -4       # save the current state of each register on the stack: \\
-    sw $t0, 0($sp)          # there is no guarantee that registers will not change \\
-    addi $sp, $sp, -4       # during the draw_entity function call
-    sw $t1, 0($sp)
-    addi $sp, $sp, -4
-    sw $t2, 0($sp)
-    addi $sp, $sp, -4
-    sw $t3, 0($sp)
-    addi $sp, $sp, -4
-    sw $t4, 0($sp)
+    push ($t0)              # save the current state of each register on the stack: \\
+    push ($t1)              # there is no guarantee that registers will not change \\
+    push ($t2)              # during the draw_entity function call
+    push ($t3)
+    push ($t4)
 
     move $t6, $t3           # our tile coordinate is (x, y) = ($t3, $t1); format \\
     sll $t6, $t6, 16        # this so that it can be fed into draw_entity
@@ -982,17 +975,12 @@ draw:
     move $a0, $t5
     move $a1, $t6
     jal draw_entity
-  
-    lw $t4, 0($sp)         # load the state of each register prior to the function \\
-    addi $sp, $sp, 4       # call from the stack, so that we can be sure our data
-    lw $t3, 0($sp)         # is not modified
-    addi $sp, $sp, 4
-    lw $t2, 0($sp)
-    addi $sp, $sp, 4
-    lw $t1, 0($sp)
-    addi $sp, $sp, 4
-    lw $t0, 0($sp)
-    addi $sp, $sp, 4
+    
+    pop ($t4)              # load the state of each register prior to the function \\
+    pop ($t3)              # call from the stack, so that we can be sure our data
+    pop ($t2)              # is not modified
+    pop ($t1)
+    pop ($t0)
 
   buf_bottle_sprite_end:
     addi $t3, $t3, 1        # increment the loop variable
@@ -1002,8 +990,6 @@ draw:
     j buf_bottle_loop_y
   buf_bottle_loop_y_end:
 
-    lw $ra, 0($sp)
-    
     lw $t0, CAPSULE_P1        # load information about the first half \\
     lb $t2, CAPSULE_E1        # of the player-controlled capsule
     
@@ -1024,39 +1010,33 @@ draw:
     jal draw_bottle           # load all buffered content into the display
 
   draw_return:
-    lw $ra, 0($sp)          # reload the return address from the stack
-    addi $sp, $sp, 4
+    pop ($ra)               # reload the return address from the stack
     jr $ra                  # return to the caller
 
 ## Draw the game backdrop, including the bottle graphics and other statics.
 # Takes in no arguments.
 draw_backdrop:
-    addi $sp, $sp, -4        # store return address on stack
-    sw $ra, 0($sp)
+    push ($ra)               # store return address on stack
   
     la $a0, BACKDROP         # draw the backdrop
     lw $a1, DISPLAY_HEIGHT   # backdrop takes up the entire display
     lw $a2, DISPLAY_WIDTH    # the backdrop begins at the top-left \\
     li $a3, 0x0              # of the display
 
-    addi $sp, $sp, -4        # the width of the draw region is DISPLAY_WIDTH
-    lw $t0, DISPLAY_WIDTH
-    sw $t0, 0($sp)
-    addi $sp, $sp, -4
+    lw $t0, DISPLAY_WIDTH    # the width of the draw region is DISPLAY_WIDTH
+    push ($t0)
     lw $t0, ADDR_DSPL        # draw directly on the display
-    sw $t0, 0($sp)
+    push ($t0)
     jal draw_region
 
-    lw $ra, 0($sp)           # retrieve return address from stack
-    addi $sp, $sp, 4
+    pop ($ra)                # retrieve return address from stack
     jr $ra
 
 ## Draw the contents of BOTTLE_DSPL_BUF into the actual display. This 
 ## simply applies the BOTTLE_OFFSET to the buffer and paints one-to-one.
 # Takes in no arguments.
 draw_bottle:
-  addi $sp, $sp, -4         # store return address on the stack
-  sw $ra, 0($sp)
+  push ($ra)                # store return address on the stack
   
   lw $t0, TILE_SIZE
   la $a0, BOTTLE_DSPL_BUF   # address of pixel array to read from (buffer)
@@ -1068,16 +1048,13 @@ draw_bottle:
   mflo $a2
   lw $a3, BOTTLE_OFFSET     # top-left corner of the region to draw on
 
-  addi $sp, $sp, -4         # draw region width is DISPLAY_WIDTH
-  lw $t1, DISPLAY_WIDTH
-  sw $t1, 0($sp)
-  addi $sp, $sp, -4
+  lw $t1, DISPLAY_WIDTH     # draw region width is DISPLAY_WIDTH
+  push ($t1)
   lw $t1, ADDR_DSPL         # draw directly on the display
-  sw $t1, 0($sp)
+  push ($t1)
   jal draw_region
 
-  lw $ra, 0($sp)            # retrieve return address from stack
-  addi $sp, $sp, 4
+  pop ($ra)                 # retrieve return address from stack
   jr $ra
 
 ## Draw the entity (either a capsule half or a virus) with the given
@@ -1088,8 +1065,7 @@ draw_bottle:
 # - $a1 : the (x, y) coordinate, in terms of tiles, of the entity;
 #         this should be in format (x, y) = ($a1[31:16], $a1[15:0]) 
 draw_entity:
-    addi $sp, $sp, -4       # store the return address on the stack
-    sw $ra, 0($sp)
+    push ($ra)              # store the return address on the stack
     
                             # extract the data from the entity byte:
     andi $t7, $a0, 0x0f     # load the lower 4 bits of the entity: [colour | type]
@@ -1142,19 +1118,16 @@ draw_entity:
     add $a0, $a0, $t9
   draw_entity_switch_end:
 
-    addi $sp, $sp, -4      # set draw region width to BOTTLE_WIDTH * TILE_SIZE
-    lw $t0, BOTTLE_WIDTH   # and load onto stack
-    lw $t1, TILE_SIZE
+    lw $t0, BOTTLE_WIDTH    # set draw region width to BOTTLE_WIDTH * TILE_SIZE
+    lw $t1, TILE_SIZE       # and load onto stack
     mult $t0, $t1
     mflo $t0
-    sw $t0, 0($sp)
-    la $t0, BOTTLE_DSPL_BUF
-    addi $sp, $sp, -4      # set draw_region to draw on the buffered region \\
-    sw $t0, 0($sp)         # instead of the actual display
-    jal draw_region        # call to draw the entity
+    push ($t0)
+    la $t0, BOTTLE_DSPL_BUF # set draw_region to draw on the buffered region \\
+    push ($t0)              # instead of the actual display
+    jal draw_region         # call to draw the entity
     
-    lw $ra, 0($sp)         # retrieve the return address from the stack
-    addi $sp, $sp, 4
+    pop ($ra)               # retrieve the return address from the stack
     jr $ra
 
 ## Draw a pixel array with given width and height, positioned at a
@@ -1170,10 +1143,8 @@ draw_entity:
 # - 0($sp) : the address of the region to draw on
 # - 4($sp) : the width of the region to draw on, in pixels
 draw_region:
-    lw $t0, 0($sp)              # begin working with drawing region
-    addi $sp, $sp, 4
-    lw $t7, 0($sp)              # load drawing region width
-    addi $sp, $sp, 4
+    pop ($t0)                   # begin working with drawing region
+    pop ($t7)                   # load drawing region width
     andi $t8, $a3, 0x0000ffff   # $t8 = y0 = $a3[15:0]
     andi $t9, $a3, 0xffff0000   # $t9 = x0 = $a3[31:16]
     srl $t9, $t9, 16
