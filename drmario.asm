@@ -120,6 +120,8 @@ VIRUS_CAP:          # number of viruses to spawn at game start
     .word 4
 VIRUS_YLIM:         # greatest height from the bottom of the bottle
     .word 10        # that a virus may spawn
+PREVIEW_OFFSET:     # the (x, y) starting position of the preview capsule \\
+    .word 0xa80080  # in pixels; equates to (176, 120)
 SLEEP_TIME:         # time to sleep between frames by default
     .word 16
 DELTA_CAP_DEFAULT:  # time interval between gravity applications \\
@@ -664,8 +666,8 @@ game_loop:
     beq $t0, 0, exit        # if there are no more viruses, the game is won
 
     jal load_next_capsule   # load next capsule from preview
-    jal gen_preview_capsule # create a new preview capsule
     beq $v0, 0, exit        # if the capsule fails to generate, it is game over
+    jal gen_preview_capsule # create a new preview capsule if the game continues
     
   after_gravity:
     jal draw                # draw the frame after all events are handled
@@ -1031,6 +1033,8 @@ draw:
 
     jal draw_bottle           # load all buffered content into the display
 
+    jal draw_preview          # display the preview for the next capsule
+
   draw_return:
     pop ($ra)               # reload the return address from the stack
     jr $ra                  # return to the caller
@@ -1079,6 +1083,58 @@ draw_bottle:
   pop ($ra)                 # retrieve return address from stack
   jr $ra
 
+## Given an entity byte, return the address of the first element for 
+## the pixel array of corresponding to that entity byte.
+# Takes in the following parameter:
+# - $a0 : the entity byte for the entity to be drawn
+# Returns:
+# - $v0 : the address of the first element of the pixel array, of
+#         size TILE_SIZE x TILE_SIZE, depicting the entity byte
+find_entity_array:
+                            # extract the data from the entity byte:
+    andi $t7, $a0, 0x0f     # load the lower 4 bits of the entity: [colour | type]
+    andi $t8, $a0, 0xf0     # load the upper 4 bits of the entity: [direction]
+    srl $t8, $t8, 4         # shift the direction values into the lower 4 bits
+  
+    # determine the array offset (TILE_SIZE * TILE_SIZE * 4 * t8)
+    lw $t9, TILE_SIZE       # determine the offset of the pixel array at which to \\
+    mult $t9, $t9           # begin drawing -- this is useful for the capsule \\
+    mflo $t9                # pixel arrays, which contain 5 sequences of 256 bytes \\
+    sll $t9, $t9, 2         # each of which corresponds to a specific direction.
+    mult $t9, $t8           # the offset is computed by
+    mflo $t9                # 4(TILE_SIZE * TILE_SIZE) * direction (ie $t8)
+    
+    beq $t7, 0b1000, find_entity_case_blue_virus     # determine which sprite to draw; \\
+    beq $t7, 0b0100, find_entity_case_green_virus    # if we do not match any case, the \\
+    beq $t7, 0b0010, find_entity_case_red_virus      # data is corrupted
+    beq $t7, 0b1001, find_entity_case_blue_capsule
+    beq $t7, 0b0101, find_entity_case_green_capsule
+    beq $t7, 0b0011, find_entity_case_red_capsule
+    j find_array_end
+    
+  find_entity_case_blue_virus:
+    la $v0, VIRUS_BLUE
+    j find_array_end
+  find_entity_case_green_virus:
+    la $v0, VIRUS_GREEN
+    j find_array_end
+  find_entity_case_red_virus:
+    la $v0, VIRUS_RED
+    j find_array_end
+  find_entity_case_blue_capsule:
+    la $v0, CAP_BLUE
+    add $v0, $v0, $t9
+    j find_array_end
+  find_entity_case_green_capsule:
+    la $v0, CAP_GREEN
+    add $v0, $v0, $t9
+    j find_array_end
+  find_entity_case_red_capsule:
+    la $v0, CAP_RED
+    add $v0, $v0, $t9
+  find_array_end:
+    jr $ra
+
 ## Draw the entity (either a capsule half or a virus) with the given
 ## entity byte, containing [ direction | colour | type ] information,
 ## on the bottle grid BUFFER (not display) at the specified location.
@@ -1088,57 +1144,19 @@ draw_bottle:
 #         this should be in format (x, y) = ($a1[31:16], $a1[15:0]) 
 draw_entity:
     push ($ra)              # store the return address on the stack
-    
-                            # extract the data from the entity byte:
-    andi $t7, $a0, 0x0f     # load the lower 4 bits of the entity: [colour | type]
-    andi $t8, $a0, 0xf0     # load the upper 4 bits of the entity: [direction]
-    srl $t8, $t8, 4         # shift the direction values into the lower 4 bits
 
     move $t1, $a1
     lw $t0, TILE_SIZE       # each entry in the bottle is one tile, which has dimension \\
     mult $t1, $t0           # TILE_SIZE; thus, to determine the position in the buffer \\
     mflo $t1                # we simply compute 8(x, y)
+
+    move $a0, $a0           # keeping this in case we migrate the code so source changes
+    jal find_entity_array   # find which array we must draw pixel data from
+    move $a0, $v0
     
-    # determine the array offset (TILE_SIZE * TILE_SIZE * 4 * t8)
-    lw $t9, TILE_SIZE       # determine the offset of the pixel array at which to \\
-    mult $t9, $t9           # begin drawing -- this is useful for the capsule \\
-    mflo $t9                # pixel arrays, which contain 5 sequences of 256 bytes \\
-    sll $t9, $t9, 2         # each of which corresponds to a specific direction.
-    mult $t9, $t8           # the offset is computed by
-    mflo $t9                # 4(TILE_SIZE * TILE_SIZE) * direction (ie $t8)
-    
-    lw $a1, TILE_SIZE       # load arguments for draw_region; these are not \\
-    lw $a2, TILE_SIZE       # dependent on what we are drawing (ie the pixel array)
+    lw $a1, TILE_SIZE       # load arguments for draw_region
+    lw $a2, TILE_SIZE
     move $a3, $t1
-    
-    beq $t7, 0b1000, draw_entity_case_blue_virus     # determine which sprite to draw; \\
-    beq $t7, 0b0100, draw_entity_case_green_virus    # if we do not match any case, the \\
-    beq $t7, 0b0010, draw_entity_case_red_virus      # data is corrupted
-    beq $t7, 0b1001, draw_entity_case_blue_capsule
-    beq $t7, 0b0101, draw_entity_case_green_capsule
-    beq $t7, 0b0011, draw_entity_case_red_capsule
-    
-  draw_entity_case_blue_virus:
-    la $a0, VIRUS_BLUE
-    j draw_entity_switch_end
-  draw_entity_case_green_virus:
-    la $a0, VIRUS_GREEN
-    j draw_entity_switch_end
-  draw_entity_case_red_virus:
-    la $a0, VIRUS_RED
-    j draw_entity_switch_end
-  draw_entity_case_blue_capsule:
-    la $a0, CAP_BLUE
-    add $a0, $a0, $t9
-    j draw_entity_switch_end
-  draw_entity_case_green_capsule:
-    la $a0, CAP_GREEN
-    add $a0, $a0, $t9
-    j draw_entity_switch_end
-  draw_entity_case_red_capsule:
-    la $a0, CAP_RED
-    add $a0, $a0, $t9
-  draw_entity_switch_end:
 
     lw $t0, BOTTLE_WIDTH    # set draw region width to BOTTLE_WIDTH * TILE_SIZE
     lw $t1, TILE_SIZE       # and load onto stack
@@ -1150,6 +1168,43 @@ draw_entity:
     jal draw_region         # call to draw the entity
     
     pop ($ra)               # retrieve the return address from the stack
+    jr $ra
+
+## Display the preview of the next capsule to be generated on the 
+## play field. The entity bytes are extracted from NEXT_E1 and NEXT_E2.
+# Takes in no arguments.
+draw_preview:
+    push ($ra)              # save return address on stack
+  
+    lw $a0, NEXT_E1
+    jal find_entity_array   # determine what our source pixel array is
+    move $a0, $v0
+    
+    lw $a1, TILE_SIZE       # we are drawing an entity, which occupies \\
+    lw $a2, TILE_SIZE       # a single tile of dimension TILE_SIZE
+    lw $a3, PREVIEW_OFFSET  # set start position of drawing region
+    lw $t0, DISPLAY_WIDTH
+    push ($t0)              # set width to total display width
+    lw $t0, ADDR_DSPL       # draw directly on the screen
+    push ($t0)
+    jal draw_region
+
+    lw $a0, NEXT_E2         # do everything again for the second half
+    jal find_entity_array   # determine what our source pixel array is
+    move $a0, $v0
+    
+    lw $a1, TILE_SIZE       # we are drawing an entity, which occupies \\
+    lw $a2, TILE_SIZE       # a single tile of dimension TILE_SIZE
+    lw $a3, PREVIEW_OFFSET  # set start position of drawing region \\
+    sll $t0, $a2, 16        # shift TILE_SIZE to be added to x-coordinate, \\
+    add $a3, $a3, $t0       # as we offset drawing by TILE_SIZE to the right
+    lw $t0, DISPLAY_WIDTH
+    push ($t0)              # set width to total display width
+    lw $t0, ADDR_DSPL       # draw directly on the screen
+    push ($t0)
+    jal draw_region
+    
+    pop ($ra)               # retrieve return address from stack
     jr $ra
 
 ## Draw a pixel array with given width and height, positioned at a
