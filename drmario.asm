@@ -94,7 +94,7 @@ F_VIRUS_RED:
     .align 2
 VIRUS_BLUE:      # virus pixel array; each pixel is 4 bytes, and \\
     .space 256   # the dimensions of the sprite are TILE_SIZE x TILE_SIZE \\
-VIRUS_GREEN:    # so that our size is 8 * 8 * 4 = 256
+VIRUS_GREEN:     # so that our size is 8 * 8 * 4 = 256
     .space 256
 VIRUS_RED:
     .space 256
@@ -177,6 +177,11 @@ CAPSULE_E2:         # [ direction | colour | 1 ], and encoded as the entries
     .space 1        # of BOTTLE are
     .align 2
 
+NEXT_E1:            # entity bytes for the first and second halves of the \\
+    .space 4        # NEXT capsule, to become the player capsule after the \\ 
+NEXT_E2:            # current player capsule lands
+    .space 4
+
 DELTA_CAP:          # time interval between gravity applications
     .space 4
 DELTA:              # time since last gravity application
@@ -218,7 +223,9 @@ main:
     jal init_bottle      # zero out the initial bottle array
     jal init_bmp         # initialize the bitmap
     jal generate_virus   # place initial viruses in bottle
-    jal generate_capsule # generate a new capsule for the player
+    jal gen_preview_capsule
+    jal load_next_capsule
+    jal gen_preview_capsule
     jal draw_backdrop    # draw the backdrop only once
     jal draw             # draw the state of the game before start
 
@@ -541,6 +548,27 @@ generate_virus:
     pop ($ra)              # retrieve return address from stack
     jr $ra
 
+## Generate the next capsule to load. This is used in the preview
+## for the NEXT capsule.
+# This function takes no arguments.
+gen_preview_capsule:
+    push ($ra)                 # store return address on stack
+    
+    jal generate_colour        # generate a colour for the first capsule \\
+    move $t0, $v0              # half, and shift left by one to align with \\
+    sll $t0, $t0, 1            # the expected formatting (colour data ends \\
+    ori $t0, $t0, 0b00000001   # at bit 1 not 0); then indicate the entity \\
+    sb $t0, NEXT_E1            # is a capsule in the last bit with 1
+
+    jal generate_colour        # generate a colour for the second capsule \\
+    move $t0, $v0              # half and set up entity byte using the \\
+    sll $t0, $t0, 1            # same procedure as the first capsule half
+    ori $t0, $t0, 0b00010001
+    sb $t0, NEXT_E2
+    
+    pop ($ra)                  # retrieve return address from stack
+    jr $ra
+
 ## Generate a new player capsule and load its information into.
 ## CAPSULE_Pn and CAPSULE_En memory locations.
 # This function takes no arguments, and returns:
@@ -548,7 +576,7 @@ generate_virus:
 #         capsule cannot generate. This latter circumstance only 
 #         occurs if the capsule init position is already occupied
 #         by some other entity, and should be used to trigger Game Over.
-generate_capsule:
+load_next_capsule:
     li $s7, 0              # the default return value is 0
   
     lw $t0, BOTTLE_WIDTH   # the capsule is positioned in the middle \\
@@ -575,24 +603,17 @@ generate_capsule:
     jal validate
     move $s1, $v0
     and $s0, $s0, $s1      # can only spawn if neither validation fails
-    beq $s0, 0, generate_capsule_exit
+    beq $s0, 0, load_capsule_exit
 
     li $s7, 1              # if we reach this point, the position is valid, \\
                            # and capsule generation has succeeded
     
-    jal generate_colour        # generate a colour for the first capsule \\
-    move $t0, $v0              # half, and shift left by one to align with \\
-    sll $t0, $t0, 1            # the expected formatting (colour data ends \\
-    ori $t0, $t0, 0b00000001   # at bit 1 not 0); then indicate the entity \\
-    sb $t0, CAPSULE_E1         # is a capsule in the last bit with 1
-
-    jal generate_colour        # generate a colour for the second capsule \\
-    move $t0, $v0              # half and set up entity byte using the \\
-    sll $t0, $t0, 1            # same procedure as the first capsule half
-    ori $t0, $t0, 0b00010001
+    lb $t0, NEXT_E1        # load preview capsule data into player capsule
+    sb $t0, CAPSULE_E1
+    lb $t0, NEXT_E2
     sb $t0, CAPSULE_E2
-
-  generate_capsule_exit:
+    
+  load_capsule_exit:
     move $v0, $s7          # shift the return value into the correct register
     pop ($ra)              # retrieve the return address stored on \\
     jr $ra                 # the stack, and return to the caller
@@ -642,7 +663,8 @@ game_loop:
     lw $t0, VIRUS_COUNT
     beq $t0, 0, exit        # if there are no more viruses, the game is won
 
-    jal generate_capsule
+    jal load_next_capsule   # load next capsule from preview
+    jal gen_preview_capsule # create a new preview capsule
     beq $v0, 0, exit        # if the capsule fails to generate, it is game over
     
   after_gravity:
