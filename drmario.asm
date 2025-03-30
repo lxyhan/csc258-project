@@ -1,8 +1,8 @@
 ######################## CSC258 Assembly Final Project #######################
 # This file contains our implementation of Dr Mario.
 #
-# Student 1: Stefan Barna, 1010257758
-# Student 2: James Han, 
+# Student 1: Name, Student Number
+# Student 2: Name, Student Number (if applicable)
 #
 # We assert that the code submitted here is entirely our own 
 # creation, and will indicate otherwise when it is not.
@@ -22,79 +22,79 @@
 DISPLAY_REGION_BUFFER:   # space allocated to avoid overlap between bitmap region
     .space 230000        # and .data segment in memory; DO NOT USE
 F_BACKDROP:
-    .asciiz "sprites/bottle.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/bottle.bmp"
     .align 2
 BACKDROP:           # capsule pixel array; each pixel is 4 bytes \\
     .space 229376   # 256 * 244 * 4 = 229376
 F_BOTTLE_GRID_IMG:
-    .asciiz "sprites/grid.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/grid.bmp"
     .align 2
 BOTTLE_GRID_IMG:
     .space 32768    # 4 * BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE ^ 2
 F_CAP_BLUE_LEFT:
-    .asciiz "sprites/cap_blue_left.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_left.bmp"
     .align 2
 F_CAP_BLUE_RIGHT:
-    .asciiz "sprites/cap_blue_right.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_right.bmp"
     .align 2
 F_CAP_BLUE_TOP:
-    .asciiz "sprites/cap_blue_top.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_top.bmp"
     .align 2
 F_CAP_BLUE_BOTTOM:
-    .asciiz "sprites/cap_blue_bottom.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_bottom.bmp"
     .align 2
 F_CAP_BLUE_CENTRE:
-    .asciiz "sprites/cap_blue_centre.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_centre.bmp"
     .align 2
 F_CAP_GREEN_LEFT:
-    .asciiz "sprites/cap_green_left.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_left.bmp"
     .align 2
 F_CAP_GREEN_RIGHT:
-    .asciiz "sprites/cap_green_right.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_right.bmp"
     .align 2
 F_CAP_GREEN_TOP:
-    .asciiz "sprites/cap_green_top.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_top.bmp"
     .align 2
 F_CAP_GREEN_BOTTOM:
-    .asciiz "sprites/cap_green_bottom.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_bottom.bmp"
     .align 2
 F_CAP_GREEN_CENTRE:
-    .asciiz "sprites/cap_green_centre.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_centre.bmp"
     .align 2
 F_CAP_RED_LEFT:
-    .asciiz "sprites/cap_red_left.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_left.bmp"
     .align 2
 F_CAP_RED_RIGHT:
-    .asciiz "sprites/cap_red_right.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_right.bmp"
     .align 2
 F_CAP_RED_TOP:
-    .asciiz "sprites/cap_red_top.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_top.bmp"
     .align 2
 F_CAP_RED_BOTTOM:
-    .asciiz "sprites/cap_red_bottom.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_bottom.bmp"
     .align 2
 F_CAP_RED_CENTRE:
-    .asciiz "sprites/cap_red_centre.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_centre.bmp"
     .align 2
 CAP_BLUE:         # capsule pixel array; each pixel is 4 bytes \\
     .space 1280   # 256 * 5 = 1280; we store the bitmap in order \\
-CAP_GREEN:        # [left, right, up, down, centre]
+CAP_GREEN:       # [left, right, up, down, centre]
     .space 1280
 CAP_RED:
     .space 1280
 
 F_VIRUS_BLUE:
-    .asciiz "sprites/virus_blue.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_blue.bmp"
     .align 2
 F_VIRUS_GREEN:
-    .asciiz "sprites/virus_green.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_green.bmp"
     .align 2
 F_VIRUS_RED:
-    .asciiz "sprites/virus_red.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_red.bmp"
     .align 2
 VIRUS_BLUE:      # virus pixel array; each pixel is 4 bytes, and \\
     .space 256   # the dimensions of the sprite are TILE_SIZE x TILE_SIZE \\
-VIRUS_GREEN:     # so that our size is 8 * 8 * 4 = 256
+VIRUS_GREEN:    # so that our size is 8 * 8 * 4 = 256
     .space 256
 VIRUS_RED:
     .space 256
@@ -120,8 +120,6 @@ VIRUS_CAP:          # number of viruses to spawn at game start
     .word 4
 VIRUS_YLIM:         # greatest height from the bottom of the bottle
     .word 10        # that a virus may spawn
-PREVIEW_OFFSET:     # the (x, y) starting position of the preview capsule \\
-    .word 0xa80080  # in pixels; equates to (176, 120)
 SLEEP_TIME:         # time to sleep between frames by default
     .word 16
 DELTA_CAP_DEFAULT:  # time interval between gravity applications \\
@@ -179,11 +177,6 @@ CAPSULE_E2:         # [ direction | colour | 1 ], and encoded as the entries
     .space 1        # of BOTTLE are
     .align 2
 
-NEXT_E1:            # entity bytes for the first and second halves of the \\
-    .space 4        # NEXT capsule, to become the player capsule after the \\ 
-NEXT_E2:            # current player capsule lands
-    .space 4
-
 DELTA_CAP:          # time interval between gravity applications
     .space 4
 DELTA:              # time since last gravity application
@@ -200,19 +193,6 @@ BITMAP_OFFSET:
     .space 4
 
 ##############################################################################
-# Stack Macros
-##############################################################################
-.macro push (%reg)
-    addi $sp, $sp, -4
-    sw %reg, 0($sp)
-.end_macro
-
-.macro pop (%reg)
-    lw %reg, 0($sp)
-    addi $sp, $sp, 4
-.end_macro
-
-##############################################################################
 # Code
 ##############################################################################
     .text
@@ -225,9 +205,7 @@ main:
     jal init_bottle      # zero out the initial bottle array
     jal init_bmp         # initialize the bitmap
     jal generate_virus   # place initial viruses in bottle
-    jal gen_preview_capsule
-    jal load_next_capsule
-    jal gen_preview_capsule
+    jal generate_capsule # generate a new capsule for the player
     jal draw_backdrop    # draw the backdrop only once
     jal draw             # draw the state of the game before start
 
@@ -490,8 +468,6 @@ commit_to_bottle:
 ## Generate VIRUS_COUNT viruses on the bottle grid.
 # This function takes no arguments.
 generate_virus:
-    push ($ra)          # save return address on stack
-
     li $t0, 0           # introduce a loop variable $t0
     lw $t1, VIRUS_CAP   # bound loop variable by $t1
   generate_virus_loop:                  # exit loop once we have \\
@@ -528,17 +504,25 @@ generate_virus:
     lb $t6, 0($t4)
     bne $t6, $zero, generate_virus_loop
 
-    push ($t0)             # generate a new colour for this virus; \\
-    push ($t1)             # as this makes a function call, we \\
-    push ($t4)             # must store the return address and \\
-                           # any data that we need to persist \\
-                           # in the stack
+    addi $sp, $sp, -4      # generate a new colour for this virus; \\
+    sw $t0, 0($sp)         # as this makes a function call, we \\
+    addi $sp, $sp, -4      # must store the return address and \\
+    sw $t1, 0($sp)         # any data that we need to persist \\
+    addi $sp, $sp, -4      # in the stack
+    sw $t4, 0($sp)
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
     
     jal generate_colour
- 
-    pop ($t4)              # retrieve data from the stack
-    pop ($t1)
-    pop ($t0)
+
+    lw $ra, 0($sp)         # load data from the stack
+    addi $sp, $sp, 4
+    lw $t4, 0($sp)
+    addi $sp, $sp, 4
+    lw $t1, 0($sp)
+    addi $sp, $sp, 4
+    lw $t0, 0($sp)
+    addi $sp, $sp, 4
 
     sll $v0, $v0, 1        # we want entry to have form \\
     sb $v0, 0($t4)         # [ 0000 | colour | 0 ] for a coloured \\
@@ -547,28 +531,6 @@ generate_virus:
     addi, $t0, $t0, 1      # only increment if a virus was \\
     j generate_virus_loop  # successfully generated
   generate_virus_exit:
-    pop ($ra)              # retrieve return address from stack
-    jr $ra
-
-## Generate the next capsule to load. This is used in the preview
-## for the NEXT capsule.
-# This function takes no arguments.
-gen_preview_capsule:
-    push ($ra)                 # store return address on stack
-    
-    jal generate_colour        # generate a colour for the first capsule \\
-    move $t0, $v0              # half, and shift left by one to align with \\
-    sll $t0, $t0, 1            # the expected formatting (colour data ends \\
-    ori $t0, $t0, 0b00000001   # at bit 1 not 0); then indicate the entity \\
-    sb $t0, NEXT_E1            # is a capsule in the last bit with 1
-
-    jal generate_colour        # generate a colour for the second capsule \\
-    move $t0, $v0              # half and set up entity byte using the \\
-    sll $t0, $t0, 1            # same procedure as the first capsule half
-    ori $t0, $t0, 0b00010001
-    sb $t0, NEXT_E2
-    
-    pop ($ra)                  # retrieve return address from stack
     jr $ra
 
 ## Generate a new player capsule and load its information into.
@@ -578,7 +540,7 @@ gen_preview_capsule:
 #         capsule cannot generate. This latter circumstance only 
 #         occurs if the capsule init position is already occupied
 #         by some other entity, and should be used to trigger Game Over.
-load_next_capsule:
+generate_capsule:
     li $s7, 0              # the default return value is 0
   
     lw $t0, BOTTLE_WIDTH   # the capsule is positioned in the middle \\
@@ -594,8 +556,8 @@ load_next_capsule:
     sll $t1, $t1, 16       # so the first half is always to the left
     sw $t1, CAPSULE_P1
     
-    push ($ra)             # store the return address for the current \\
-                           # function in the stack prior to making other
+    addi $sp, $sp, -4      # store the return address for the current \\
+    sw $ra, 0($sp)         # function in the stack prior to making other
                            # function calls
 
     lw $a0, CAPSULE_P2     # validate the position of the new capsule; \\
@@ -605,20 +567,28 @@ load_next_capsule:
     jal validate
     move $s1, $v0
     and $s0, $s0, $s1      # can only spawn if neither validation fails
-    beq $s0, 0, load_capsule_exit
+    beq $s0, 0, generate_capsule_exit
 
     li $s7, 1              # if we reach this point, the position is valid, \\
                            # and capsule generation has succeeded
     
-    lb $t0, NEXT_E1        # load preview capsule data into player capsule
-    sb $t0, CAPSULE_E1
-    lb $t0, NEXT_E2
+    jal generate_colour        # generate a colour for the first capsule \\
+    move $t0, $v0              # half, and shift left by one to align with \\
+    sll $t0, $t0, 1            # the expected formatting (colour data ends \\
+    ori $t0, $t0, 0b00000001   # at bit 1 not 0); then indicate the entity \\
+    sb $t0, CAPSULE_E1         # is a capsule in the last bit with 1
+
+    jal generate_colour        # generate a colour for the second capsule \\
+    move $t0, $v0              # half and set up entity byte using the \\
+    sll $t0, $t0, 1            # same procedure as the first capsule half
+    ori $t0, $t0, 0b00010001
     sb $t0, CAPSULE_E2
-    
-  load_capsule_exit:
+
+  generate_capsule_exit:
     move $v0, $s7          # shift the return value into the correct register
-    pop ($ra)              # retrieve the return address stored on \\
-    jr $ra                 # the stack, and return to the caller
+    lw $ra, 0($sp)         # retrieve the return address stored on \\
+    addi $sp, $sp, 4       # the stack, and return to the caller
+    jr $ra
 
 ## The main game loop. This runs indefinitely once the game state
 ## is initialized by the main function.
@@ -660,14 +630,13 @@ game_loop:
     lb $a1, CAPSULE_E2
     jal commit_to_bottle
     
-    # TODO: add checks for clears and cascading
+    jal process_cascade           # Process cascading matches and gravity
     
-    lw $t0, VIRUS_COUNT
-    beq $t0, 0, exit        # if there are no more viruses, the game is won
+    lw $t0, VIRUS_COUNT           # Check if all viruses are gone
+    beq $t0, 0, exit              # if there are no more viruses, the game is won
 
-    jal load_next_capsule   # load next capsule from preview
-    beq $v0, 0, exit        # if the capsule fails to generate, it is game over
-    jal gen_preview_capsule # create a new preview capsule if the game continues
+    jal generate_capsule          # Generate a new capsule
+    beq $v0, 0, exit              # if the capsule fails to generate, it is game over
     
   after_gravity:
     jal draw                # draw the frame after all events are handled
@@ -675,14 +644,359 @@ game_loop:
     li $v0, 32
     lw, $a0, SLEEP_TIME   # set the amount of time to sleep
     syscall               # sleep until the next frame     
-
     j game_loop           # return to the beginning of the loop
 
+# process_cascade function
+# Handles the cascade effect - checking for matches, applying gravity, and repeating
+# until no more matches are found
+process_cascade:
+    addi $sp, $sp, -4       # Save return address
+    sw $ra, 0($sp)
+    
+cascade_loop:
+    # Check for matches and clear them
+    jal check_matches
+    beq $v0, $zero, cascade_exit   # If no matches found, we're done
+    
+    # Draw the updated state (to show matches being cleared)
+    jal draw
+    
+    # Sleep briefly to make the clearing visible
+    li $v0, 32
+    li $a0, 300            # Sleep for 300ms
+    syscall
+    
+    # Apply gravity to make pieces fall
+    jal apply_gravity
+    
+    # Draw the updated state (to show pieces falling)
+    jal draw
+    
+    # Sleep briefly to make the falling visible
+    li $v0, 32
+    li $a0, 300            # Sleep for 300ms
+    syscall
+    
+    # Repeat until no more matches are found
+    j cascade_loop
+    
+cascade_exit:
+    lw $ra, 0($sp)          # Restore return address
+    addi $sp, $sp, 4
+    jr $ra                  # Return to caller
+    
+# check_matches function
+# Checks for horizontal and vertical matches of 4+ of the same color
+# Returns:
+# - $v0: 1 if matches were found and cleared, 0 otherwise
+check_matches:
+    addi $sp, $sp, -4       # Save return address
+    sw $ra, 0($sp)
+    
+    # Initialize return value to 0 (no matches found yet)
+    li $v0, 0
+    
+    # Check for horizontal matches
+    li $t0, 0               # Row counter (y)
+    lw $t1, BOTTLE_HEIGHT   # Load bottle height for loop bound
+    
+check_horiz_loop_y:
+    bge $t0, $t1, check_horiz_done   # If y >= BOTTLE_HEIGHT, exit horizontal check
+    
+    li $t2, 0               # Column counter (x)
+    lw $t3, BOTTLE_WIDTH
+    addi $t3, $t3, -3       # Only need to check up to (width-3)
+    
+check_horiz_loop_x:
+    bgt $t2, $t3, check_horiz_next_y    # If x > (width-3), move to next row
+    
+    # Calculate position in bottle: (y * width + x)
+    la $t4, BOTTLE          # Base address of bottle
+    lw $t5, BOTTLE_WIDTH
+    mult $t0, $t5           # y * width
+    mflo $t5
+    add $t5, $t5, $t2       # y * width + x
+    add $t4, $t4, $t5       # Address of current position
+    
+    # Load the entity at current position
+    lb $t5, 0($t4)
+    
+    # Skip if empty
+    beq $t5, $zero, check_horiz_next_x
+    
+    # Extract color bits (bits 1-3)
+    andi $t6, $t5, 0x0E
+    
+    # Check next 3 positions for same color
+    lb $t7, 1($t4)          # Load entity at x+1
+    beq $t7, $zero, check_horiz_next_x  # Skip if empty
+    andi $t8, $t7, 0x0E     # Get color
+    bne $t8, $t6, check_horiz_next_x  # Skip if color doesn't match
+    
+    lb $t7, 2($t4)          # Load entity at x+2
+    beq $t7, $zero, check_horiz_next_x  # Skip if empty
+    andi $t8, $t7, 0x0E     # Get color
+    bne $t8, $t6, check_horiz_next_x  # Skip if color doesn't match
+    
+    lb $t7, 3($t4)          # Load entity at x+3
+    beq $t7, $zero, check_horiz_next_x  # Skip if empty
+    andi $t8, $t7, 0x0E     # Get color
+    bne $t8, $t6, check_horiz_next_x  # Skip if color doesn't match
+    
+    # We found a match! Set return value to 1
+    li $v0, 1
+    
+    # Check and update virus count if any are viruses
+    lb $t7, 0($t4)
+    andi $t8, $t7, 0x01     # Type bit (0=virus, 1=capsule)
+    bne $t8, $zero, skip_h_virus1  # Skip if it's a capsule
+    lw $t9, VIRUS_COUNT
+    addi $t9, $t9, -1       # Decrement virus count
+    sw $t9, VIRUS_COUNT
+skip_h_virus1:
+    
+    lb $t7, 1($t4)
+    andi $t8, $t7, 0x01
+    bne $t8, $zero, skip_h_virus2
+    lw $t9, VIRUS_COUNT
+    addi $t9, $t9, -1
+    sw $t9, VIRUS_COUNT
+skip_h_virus2:
+    
+    lb $t7, 2($t4)
+    andi $t8, $t7, 0x01
+    bne $t8, $zero, skip_h_virus3
+    lw $t9, VIRUS_COUNT
+    addi $t9, $t9, -1
+    sw $t9, VIRUS_COUNT
+skip_h_virus3:
+    
+    lb $t7, 3($t4)
+    andi $t8, $t7, 0x01
+    bne $t8, $zero, skip_h_virus4
+    lw $t9, VIRUS_COUNT
+    addi $t9, $t9, -1
+    sw $t9, VIRUS_COUNT
+skip_h_virus4:
+    
+    # Now clear the 4 matched entities
+    sb $zero, 0($t4)
+    sb $zero, 1($t4)
+    sb $zero, 2($t4)
+    sb $zero, 3($t4)
+    
+check_horiz_next_x:
+    addi $t2, $t2, 1        # Next column
+    j check_horiz_loop_x
+    
+check_horiz_next_y:
+    addi $t0, $t0, 1        # Next row
+    j check_horiz_loop_y
+    
+check_horiz_done:
+    # Now check for vertical matches
+    li $t2, 0               # Column counter (x)
+    lw $t3, BOTTLE_WIDTH
+    
+check_vert_loop_x:
+    bge $t2, $t3, check_vert_done   # If x >= BOTTLE_WIDTH, exit vertical check
+    
+    li $t0, 0               # Row counter (y)
+    lw $t1, BOTTLE_HEIGHT
+    addi $t1, $t1, -3       # Only need to check up to (height-3)
+    
+check_vert_loop_y:
+    bgt $t0, $t1, check_vert_next_x   # If y > (height-3), move to next column
+    
+    # Calculate position: (y * width + x)
+    la $t4, BOTTLE
+    lw $t5, BOTTLE_WIDTH
+    mult $t0, $t5
+    mflo $t5
+    add $t5, $t5, $t2
+    add $t4, $t4, $t5       # Address of current position
+    
+    # Load entity at current position
+    lb $t5, 0($t4)
+    
+    # Skip if empty
+    beq $t5, $zero, check_vert_next_y
+    
+    # Extract color
+    andi $t6, $t5, 0x0E
+    
+    # Check next 3 positions below for same color
+    lw $t9, BOTTLE_WIDTH
+    
+    add $t7, $t4, $t9       # Address of (x, y+1)
+    lb $t8, 0($t7)
+    beq $t8, $zero, check_vert_next_y  # Skip if empty
+    andi $t8, $t8, 0x0E
+    bne $t8, $t6, check_vert_next_y    # Skip if color doesn't match
+    
+    add $t7, $t7, $t9       # Address of (x, y+2)
+    lb $t8, 0($t7)
+    beq $t8, $zero, check_vert_next_y  # Skip if empty
+    andi $t8, $t8, 0x0E
+    bne $t8, $t6, check_vert_next_y    # Skip if color doesn't match
+    
+    add $t7, $t7, $t9       # Address of (x, y+3)
+    lb $t8, 0($t7)
+    beq $t8, $zero, check_vert_next_y  # Skip if empty
+    andi $t8, $t8, 0x0E
+    bne $t8, $t6, check_vert_next_y    # Skip if color doesn't match
+    
+    # We found a match! Set return value to 1
+    li $v0, 1
+    
+    # Check and update virus count if any are viruses
+    lb $t7, 0($t4)
+    andi $t8, $t7, 0x01     # Type bit (0=virus, 1=capsule)
+    bne $t8, $zero, skip_v_virus1  # Skip if it's a capsule
+    lw $t9, VIRUS_COUNT
+    addi $t9, $t9, -1       # Decrement virus count
+    sw $t9, VIRUS_COUNT
+skip_v_virus1:
+    
+    lw $t9, BOTTLE_WIDTH
+    add $t7, $t4, $t9       # Address of (x, y+1)
+    lb $t8, 0($t7)
+    andi $t8, $t8, 0x01
+    bne $t8, $zero, skip_v_virus2
+    lw $t9, VIRUS_COUNT
+    addi $t9, $t9, -1
+    sw $t9, VIRUS_COUNT
+skip_v_virus2:
+    
+    lw $t9, BOTTLE_WIDTH
+    add $t7, $t4, $t9       # (x, y+1)
+    add $t7, $t7, $t9       # (x, y+2)
+    lb $t8, 0($t7)
+    andi $t8, $t8, 0x01
+    bne $t8, $zero, skip_v_virus3
+    lw $t9, VIRUS_COUNT
+    addi $t9, $t9, -1
+    sw $t9, VIRUS_COUNT
+skip_v_virus3:
+    
+    lw $t9, BOTTLE_WIDTH
+    add $t7, $t4, $t9       # (x, y+1)
+    add $t7, $t7, $t9       # (x, y+2)
+    add $t7, $t7, $t9       # (x, y+3)
+    lb $t8, 0($t7)
+    andi $t8, $t8, 0x01
+    bne $t8, $zero, skip_v_virus4
+    lw $t9, VIRUS_COUNT
+    addi $t9, $t9, -1
+    sw $t9, VIRUS_COUNT
+skip_v_virus4:
+    
+    # Now clear the 4 matched entities
+    sb $zero, 0($t4)
+    
+    lw $t9, BOTTLE_WIDTH
+    add $t7, $t4, $t9       # (x, y+1)
+    sb $zero, 0($t7)
+    
+    add $t7, $t7, $t9       # (x, y+2)
+    sb $zero, 0($t7)
+    
+    add $t7, $t7, $t9       # (x, y+3)
+    sb $zero, 0($t7)
+    
+check_vert_next_y:
+    addi $t0, $t0, 1        # Next row
+    j check_vert_loop_y
+    
+check_vert_next_x:
+    addi $t2, $t2, 1        # Next column
+    j check_vert_loop_x
+    
+check_vert_done:
+    # Finished checking, return to caller
+    lw $ra, 0($sp)          # Restore return address
+    addi $sp, $sp, 4
+    jr $ra                  # Return to caller
+    # apply_gravity function
+# Makes floating capsules fall until they hit an obstacle
+# Returns:
+# - $v0: 1 if any capsules fell, 0 otherwise
+apply_gravity:
+    addi $sp, $sp, -4       # Save return address
+    sw $ra, 0($sp)
+    
+    li $v0, 0               # Default: nothing fell
+    
+    # We'll need multiple passes through the grid to ensure all pieces fall fully
+    li $t9, 1               # Set flag to indicate we need to keep checking
+    
+gravity_outer_loop:
+    beq $t9, $zero, gravity_exit  # If no pieces fell in the last pass, we're done
+    
+    li $t9, 0               # Reset the flag for this pass
+    
+    # Start from second-to-last row (bottom row can't fall further)
+    lw $t0, BOTTLE_HEIGHT   
+    addi $t0, $t0, -2       # Start at height-2
+    
+gravity_row_loop:
+    bltz $t0, gravity_outer_loop  # If we've gone through all rows, start a new pass
+    
+    li $t1, 0               # Column counter
+    lw $t2, BOTTLE_WIDTH    
+    
+gravity_col_loop:
+    bge $t1, $t2, gravity_next_row  # If done with this row, go to next row up
+    
+    # Calculate position: BOTTLE + (y * width + x)
+    la $t3, BOTTLE
+    lw $t4, BOTTLE_WIDTH
+    mult $t0, $t4
+    mflo $t4
+    add $t4, $t4, $t1
+    add $t3, $t3, $t4       # Current position address
+    
+    # Load entity at current position
+    lb $t4, 0($t3)
+    
+    # Skip if empty
+    beq $t4, $zero, gravity_next_col
+    
+    # Check if it's a capsule (not a virus)
+    andi $t5, $t4, 0x01     # Type bit (0=virus, 1=capsule)
+    beq $t5, $zero, gravity_next_col  # Skip if it's a virus (viruses don't fall)
+    
+    # Check if the space below is empty
+    lw $t6, BOTTLE_WIDTH
+    add $t7, $t3, $t6       # Address of position below
+    lb $t8, 0($t7)          # Entity below
+    bne $t8, $zero, gravity_next_col  # Skip if space below is not empty
+    
+    # Space below is empty, make this capsule part fall
+    sb $t4, 0($t7)          # Copy entity to position below
+    sb $zero, 0($t3)        # Clear current position
+    li $v0, 1               # Set return value to indicate something fell
+    li $t9, 1               # Set flag to indicate we need another pass
+    
+gravity_next_col:
+    addi $t1, $t1, 1        # Next column
+    j gravity_col_loop
+    
+gravity_next_row:
+    addi $t0, $t0, -1       # Move up one row (decreasing y)
+    j gravity_row_loop
+    
+gravity_exit:
+    lw $ra, 0($sp)          # Restore return address
+    addi $sp, $sp, 4
+    jr $ra                  # Return to caller
+    
 ## Handle keyboard input. Will verify that input is recieved, and 
 ## otherwise do nothing.
 # This function takes in no arguments.
 keyboard_input:
-    push ($ra)                      # save the return address
+    addi $sp, $sp, -4               # save the return address
+    sw $ra, 0($sp)
     lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
     lw $t8, 0($t0)                  # load first word from keyboard
     lw $t1, 4($t0)                  # load the key pressed
@@ -769,7 +1083,8 @@ keyboard_input:
     # TODO: we may choose to implement this as part of Milestone 5
     j keyboard_input_exit
   keyboard_input_exit:
-    pop ($ra)                       # retrieve return address from the stack
+    lw $ra, 0($sp)                  # retrieve return address from the stack
+    addi $sp, $sp, 4
     jr $ra                          # return to caller
 
 ## Validate the position of a given entity. This function checks that
@@ -821,7 +1136,8 @@ validate:
 ## occurs during the rotation, return to original position.
 # Takes in no parameter.
 rotate_capsule:
-    push ($ra)                      # store return address on stack
+    addi $sp, $sp, -4               # store return address in stack
+    sw $ra, 0($sp)
   
     lw $t0, CAPSULE_P1              # load capsule information
     lw $t1, CAPSULE_P2
@@ -862,7 +1178,8 @@ rotate_capsule:
     sb $s2, CAPSULE_E1              # as entity direction data has been changed, \\
     sb $s3, CAPSULE_E2              # update also the entity bytes for each half
   rotate_capsule_exit:
-    pop ($ra)                       # retrieve return address from stack
+    lw $ra, 0($sp)                  # retrieve return address from stack
+    addi $sp, $sp, 4
     jr $ra
 
 ## Apply an input displacement to the player capsule, and return
@@ -873,7 +1190,8 @@ rotate_capsule:
 # - $v0 : whether the player capsule has been moved down; 1 if there
 #         was no collision, and 0 otherwise
 displace:
-    push ($ra)                      # store the return address on the stack
+    addi $sp, $sp, -4               # store the return address on the stack
+    sw $ra, 0($sp)
 
     lw $t0, CAPSULE_P1              # load capsule information
     lw $t1, CAPSULE_P2
@@ -895,7 +1213,8 @@ displace:
     sw $s1, CAPSULE_P2              # and return 1
     li $v0, 1
   displace_exit:
-    pop ($ra)                       # load the return address from the stack
+    lw $ra, 0($sp)                  # load the return address from the stack
+    addi $sp, $sp, 4
     jr $ra
 
 ## Apply an input displacement to the target entity, and return
@@ -909,7 +1228,8 @@ displace:
 # - $v0 : whether the player capsule has been moved down; 1 if there
 #         was no collision, and 0 otherwise
 displace_solo:
-    push ($ra)                   # store the return address on the stack
+    addi $sp, $sp, -4            # store the return address on the stack
+    sw $ra, 0($sp)
 
     move $s0, $a0
     lw $s1, 0($s0)
@@ -925,7 +1245,8 @@ displace_solo:
     sw $s1, 0($s0)               # otherwise, commit the changes and \\
     li $v0, 1                    # return 1
   displace_solo_exit:
-    pop ($ra)                    # load the return address from the stack
+    lw $ra, 0($sp)               # load the return address from the stack
+    addi $sp, $sp, 4
     jr $ra
 
 ## Reload the contents of BOTTLE_GRID into BOTTLE_DSPL_BUF. This procedure
@@ -957,7 +1278,8 @@ reset_dspl_buf:
 ## controlled by the player.
 ## This function only modifies $t registers.
 draw:
-    push ($ra)               # save return address, as it will be overwritten in future calls
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)           # save return address, as it will be overwritten in future calls
     
     # TODO: draw the doctor (only necessary if we choose to animate)
     # TODO: draw the score on the score board
@@ -984,13 +1306,18 @@ draw:
     lb $t5, 0($t6)
     
     beq $t5, 0, buf_bottle_sprite_end   # if there is nothing at this entry, \\
-                                        # skip to the next position
+                                         # skip to the next position
     
-    push ($t0)              # save the current state of each register on the stack: \\
-    push ($t1)              # there is no guarantee that registers will not change \\
-    push ($t2)              # during the draw_entity function call
-    push ($t3)
-    push ($t4)
+    addi $sp, $sp, -4       # save the current state of each register on the stack: \\
+    sw $t0, 0($sp)          # there is no guarantee that registers will not change \\
+    addi $sp, $sp, -4       # during the draw_entity function call
+    sw $t1, 0($sp)
+    addi $sp, $sp, -4
+    sw $t2, 0($sp)
+    addi $sp, $sp, -4
+    sw $t3, 0($sp)
+    addi $sp, $sp, -4
+    sw $t4, 0($sp)
 
     move $t6, $t3           # our tile coordinate is (x, y) = ($t3, $t1); format \\
     sll $t6, $t6, 16        # this so that it can be fed into draw_entity
@@ -999,12 +1326,17 @@ draw:
     move $a0, $t5
     move $a1, $t6
     jal draw_entity
-    
-    pop ($t4)              # load the state of each register prior to the function \\
-    pop ($t3)              # call from the stack, so that we can be sure our data
-    pop ($t2)              # is not modified
-    pop ($t1)
-    pop ($t0)
+  
+    lw $t4, 0($sp)         # load the state of each register prior to the function \\
+    addi $sp, $sp, 4       # call from the stack, so that we can be sure our data
+    lw $t3, 0($sp)         # is not modified
+    addi $sp, $sp, 4
+    lw $t2, 0($sp)
+    addi $sp, $sp, 4
+    lw $t1, 0($sp)
+    addi $sp, $sp, 4
+    lw $t0, 0($sp)
+    addi $sp, $sp, 4
 
   buf_bottle_sprite_end:
     addi $t3, $t3, 1        # increment the loop variable
@@ -1014,6 +1346,8 @@ draw:
     j buf_bottle_loop_y
   buf_bottle_loop_y_end:
 
+    lw $ra, 0($sp)
+    
     lw $t0, CAPSULE_P1        # load information about the first half \\
     lb $t2, CAPSULE_E1        # of the player-controlled capsule
     
@@ -1033,36 +1367,40 @@ draw:
 
     jal draw_bottle           # load all buffered content into the display
 
-    jal draw_preview          # display the preview for the next capsule
-
   draw_return:
-    pop ($ra)               # reload the return address from the stack
+    lw $ra, 0($sp)          # reload the return address from the stack
+    addi $sp, $sp, 4
     jr $ra                  # return to the caller
 
 ## Draw the game backdrop, including the bottle graphics and other statics.
 # Takes in no arguments.
 draw_backdrop:
-    push ($ra)               # store return address on stack
+    addi $sp, $sp, -4        # store return address on stack
+    sw $ra, 0($sp)
   
     la $a0, BACKDROP         # draw the backdrop
     lw $a1, DISPLAY_HEIGHT   # backdrop takes up the entire display
     lw $a2, DISPLAY_WIDTH    # the backdrop begins at the top-left \\
     li $a3, 0x0              # of the display
 
-    lw $t0, DISPLAY_WIDTH    # the width of the draw region is DISPLAY_WIDTH
-    push ($t0)
+    addi $sp, $sp, -4        # the width of the draw region is DISPLAY_WIDTH
+    lw $t0, DISPLAY_WIDTH
+    sw $t0, 0($sp)
+    addi $sp, $sp, -4
     lw $t0, ADDR_DSPL        # draw directly on the display
-    push ($t0)
+    sw $t0, 0($sp)
     jal draw_region
 
-    pop ($ra)                # retrieve return address from stack
+    lw $ra, 0($sp)           # retrieve return address from stack
+    addi $sp, $sp, 4
     jr $ra
 
 ## Draw the contents of BOTTLE_DSPL_BUF into the actual display. This 
 ## simply applies the BOTTLE_OFFSET to the buffer and paints one-to-one.
 # Takes in no arguments.
 draw_bottle:
-  push ($ra)                # store return address on the stack
+  addi $sp, $sp, -4         # store return address on the stack
+  sw $ra, 0($sp)
   
   lw $t0, TILE_SIZE
   la $a0, BOTTLE_DSPL_BUF   # address of pixel array to read from (buffer)
@@ -1074,66 +1412,17 @@ draw_bottle:
   mflo $a2
   lw $a3, BOTTLE_OFFSET     # top-left corner of the region to draw on
 
-  lw $t1, DISPLAY_WIDTH     # draw region width is DISPLAY_WIDTH
-  push ($t1)
+  addi $sp, $sp, -4         # draw region width is DISPLAY_WIDTH
+  lw $t1, DISPLAY_WIDTH
+  sw $t1, 0($sp)
+  addi $sp, $sp, -4
   lw $t1, ADDR_DSPL         # draw directly on the display
-  push ($t1)
+  sw $t1, 0($sp)
   jal draw_region
 
-  pop ($ra)                 # retrieve return address from stack
+  lw $ra, 0($sp)            # retrieve return address from stack
+  addi $sp, $sp, 4
   jr $ra
-
-## Given an entity byte, return the address of the first element for 
-## the pixel array of corresponding to that entity byte.
-# Takes in the following parameter:
-# - $a0 : the entity byte for the entity to be drawn
-# Returns:
-# - $v0 : the address of the first element of the pixel array, of
-#         size TILE_SIZE x TILE_SIZE, depicting the entity byte
-find_entity_array:
-                            # extract the data from the entity byte:
-    andi $t7, $a0, 0x0f     # load the lower 4 bits of the entity: [colour | type]
-    andi $t8, $a0, 0xf0     # load the upper 4 bits of the entity: [direction]
-    srl $t8, $t8, 4         # shift the direction values into the lower 4 bits
-  
-    # determine the array offset (TILE_SIZE * TILE_SIZE * 4 * t8)
-    lw $t9, TILE_SIZE       # determine the offset of the pixel array at which to \\
-    mult $t9, $t9           # begin drawing -- this is useful for the capsule \\
-    mflo $t9                # pixel arrays, which contain 5 sequences of 256 bytes \\
-    sll $t9, $t9, 2         # each of which corresponds to a specific direction.
-    mult $t9, $t8           # the offset is computed by
-    mflo $t9                # 4(TILE_SIZE * TILE_SIZE) * direction (ie $t8)
-    
-    beq $t7, 0b1000, find_entity_case_blue_virus     # determine which sprite to draw; \\
-    beq $t7, 0b0100, find_entity_case_green_virus    # if we do not match any case, the \\
-    beq $t7, 0b0010, find_entity_case_red_virus      # data is corrupted
-    beq $t7, 0b1001, find_entity_case_blue_capsule
-    beq $t7, 0b0101, find_entity_case_green_capsule
-    beq $t7, 0b0011, find_entity_case_red_capsule
-    j find_array_end
-    
-  find_entity_case_blue_virus:
-    la $v0, VIRUS_BLUE
-    j find_array_end
-  find_entity_case_green_virus:
-    la $v0, VIRUS_GREEN
-    j find_array_end
-  find_entity_case_red_virus:
-    la $v0, VIRUS_RED
-    j find_array_end
-  find_entity_case_blue_capsule:
-    la $v0, CAP_BLUE
-    add $v0, $v0, $t9
-    j find_array_end
-  find_entity_case_green_capsule:
-    la $v0, CAP_GREEN
-    add $v0, $v0, $t9
-    j find_array_end
-  find_entity_case_red_capsule:
-    la $v0, CAP_RED
-    add $v0, $v0, $t9
-  find_array_end:
-    jr $ra
 
 ## Draw the entity (either a capsule half or a virus) with the given
 ## entity byte, containing [ direction | colour | type ] information,
@@ -1143,68 +1432,73 @@ find_entity_array:
 # - $a1 : the (x, y) coordinate, in terms of tiles, of the entity;
 #         this should be in format (x, y) = ($a1[31:16], $a1[15:0]) 
 draw_entity:
-    push ($ra)              # store the return address on the stack
+    addi $sp, $sp, -4       # store the return address on the stack
+    sw $ra, 0($sp)
+    
+                            # extract the data from the entity byte:
+    andi $t7, $a0, 0x0f     # load the lower 4 bits of the entity: [colour | type]
+    andi $t8, $a0, 0xf0     # load the upper 4 bits of the entity: [direction]
+    srl $t8, $t8, 4         # shift the direction values into the lower 4 bits
 
     move $t1, $a1
     lw $t0, TILE_SIZE       # each entry in the bottle is one tile, which has dimension \\
     mult $t1, $t0           # TILE_SIZE; thus, to determine the position in the buffer \\
     mflo $t1                # we simply compute 8(x, y)
-
-    move $a0, $a0           # keeping this in case we migrate the code so source changes
-    jal find_entity_array   # find which array we must draw pixel data from
-    move $a0, $v0
     
-    lw $a1, TILE_SIZE       # load arguments for draw_region
-    lw $a2, TILE_SIZE
+    # determine the array offset (TILE_SIZE * TILE_SIZE * 4 * t8)
+    lw $t9, TILE_SIZE       # determine the offset of the pixel array at which to \\
+    mult $t9, $t9           # begin drawing -- this is useful for the capsule \\
+    mflo $t9                # pixel arrays, which contain 5 sequences of 256 bytes \\
+    sll $t9, $t9, 2         # each of which corresponds to a specific direction.
+    mult $t9, $t8           # the offset is computed by
+    mflo $t9                # 4(TILE_SIZE * TILE_SIZE) * direction (ie $t8)
+    
+    lw $a1, TILE_SIZE       # load arguments for draw_region; these are not \\
+    lw $a2, TILE_SIZE       # dependent on what we are drawing (ie the pixel array)
     move $a3, $t1
+    
+    beq $t7, 0b1000, draw_entity_case_blue_virus     # determine which sprite to draw; \\
+    beq $t7, 0b0100, draw_entity_case_green_virus    # if we do not match any case, the \\
+    beq $t7, 0b0010, draw_entity_case_red_virus      # data is corrupted
+    beq $t7, 0b1001, draw_entity_case_blue_capsule
+    beq $t7, 0b0101, draw_entity_case_green_capsule
+    beq $t7, 0b0011, draw_entity_case_red_capsule
+    
+  draw_entity_case_blue_virus:
+    la $a0, VIRUS_BLUE
+    j draw_entity_switch_end
+  draw_entity_case_green_virus:
+    la $a0, VIRUS_GREEN
+    j draw_entity_switch_end
+  draw_entity_case_red_virus:
+    la $a0, VIRUS_RED
+    j draw_entity_switch_end
+  draw_entity_case_blue_capsule:
+    la $a0, CAP_BLUE
+    add $a0, $a0, $t9
+    j draw_entity_switch_end
+  draw_entity_case_green_capsule:
+    la $a0, CAP_GREEN
+    add $a0, $a0, $t9
+    j draw_entity_switch_end
+  draw_entity_case_red_capsule:
+    la $a0, CAP_RED
+    add $a0, $a0, $t9
+  draw_entity_switch_end:
 
-    lw $t0, BOTTLE_WIDTH    # set draw region width to BOTTLE_WIDTH * TILE_SIZE
-    lw $t1, TILE_SIZE       # and load onto stack
+    addi $sp, $sp, -4      # set draw region width to BOTTLE_WIDTH * TILE_SIZE
+    lw $t0, BOTTLE_WIDTH   # and load onto stack
+    lw $t1, TILE_SIZE
     mult $t0, $t1
     mflo $t0
-    push ($t0)
-    la $t0, BOTTLE_DSPL_BUF # set draw_region to draw on the buffered region \\
-    push ($t0)              # instead of the actual display
-    jal draw_region         # call to draw the entity
+    sw $t0, 0($sp)
+    la $t0, BOTTLE_DSPL_BUF
+    addi $sp, $sp, -4      # set draw_region to draw on the buffered region \\
+    sw $t0, 0($sp)         # instead of the actual display
+    jal draw_region        # call to draw the entity
     
-    pop ($ra)               # retrieve the return address from the stack
-    jr $ra
-
-## Display the preview of the next capsule to be generated on the 
-## play field. The entity bytes are extracted from NEXT_E1 and NEXT_E2.
-# Takes in no arguments.
-draw_preview:
-    push ($ra)              # save return address on stack
-  
-    lw $a0, NEXT_E1
-    jal find_entity_array   # determine what our source pixel array is
-    move $a0, $v0
-    
-    lw $a1, TILE_SIZE       # we are drawing an entity, which occupies \\
-    lw $a2, TILE_SIZE       # a single tile of dimension TILE_SIZE
-    lw $a3, PREVIEW_OFFSET  # set start position of drawing region
-    lw $t0, DISPLAY_WIDTH
-    push ($t0)              # set width to total display width
-    lw $t0, ADDR_DSPL       # draw directly on the screen
-    push ($t0)
-    jal draw_region
-
-    lw $a0, NEXT_E2         # do everything again for the second half
-    jal find_entity_array   # determine what our source pixel array is
-    move $a0, $v0
-    
-    lw $a1, TILE_SIZE       # we are drawing an entity, which occupies \\
-    lw $a2, TILE_SIZE       # a single tile of dimension TILE_SIZE
-    lw $a3, PREVIEW_OFFSET  # set start position of drawing region \\
-    sll $t0, $a2, 16        # shift TILE_SIZE to be added to x-coordinate, \\
-    add $a3, $a3, $t0       # as we offset drawing by TILE_SIZE to the right
-    lw $t0, DISPLAY_WIDTH
-    push ($t0)              # set width to total display width
-    lw $t0, ADDR_DSPL       # draw directly on the screen
-    push ($t0)
-    jal draw_region
-    
-    pop ($ra)               # retrieve return address from stack
+    lw $ra, 0($sp)         # retrieve the return address from the stack
+    addi $sp, $sp, 4
     jr $ra
 
 ## Draw a pixel array with given width and height, positioned at a
@@ -1220,8 +1514,10 @@ draw_preview:
 # - 0($sp) : the address of the region to draw on
 # - 4($sp) : the width of the region to draw on, in pixels
 draw_region:
-    pop ($t0)                   # begin working with drawing region
-    pop ($t7)                   # load drawing region width
+    lw $t0, 0($sp)              # begin working with drawing region
+    addi $sp, $sp, 4
+    lw $t7, 0($sp)              # load drawing region width
+    addi $sp, $sp, 4
     andi $t8, $a3, 0x0000ffff   # $t8 = y0 = $a3[15:0]
     andi $t9, $a3, 0xffff0000   # $t9 = x0 = $a3[31:16]
     srl $t9, $t9, 16
