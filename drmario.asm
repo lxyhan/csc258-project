@@ -25,72 +25,72 @@ F_BACKDROP:
     .asciiz "sprites/bottle.bmp"
     .align 2
 BACKDROP:           # capsule pixel array; each pixel is 4 bytes \\
-    .space 229376   # 256 * 244 * 4 = 229376
+    .space 229376   # DISPLAY_WIDTH * DISPLAY_WIDTH * 4 = 229376
 F_BOTTLE_GRID_IMG:
     .asciiz "sprites/grid.bmp"
     .align 2
 BOTTLE_GRID_IMG:
     .space 32768    # 4 * BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE ^ 2
 F_CAP_BLUE_LEFT:
-    .asciiz "sprites/cap_blue_left.bmp"
+    .asciiz "sprites/entities/cap_blue_left.bmp"
     .align 2
 F_CAP_BLUE_RIGHT:
-    .asciiz "sprites/cap_blue_right.bmp"
+    .asciiz "sprites/entities/cap_blue_right.bmp"
     .align 2
 F_CAP_BLUE_TOP:
-    .asciiz "sprites/cap_blue_top.bmp"
+    .asciiz "sprites/entities/cap_blue_top.bmp"
     .align 2
 F_CAP_BLUE_BOTTOM:
-    .asciiz "sprites/cap_blue_bottom.bmp"
+    .asciiz "sprites/entities/cap_blue_bottom.bmp"
     .align 2
 F_CAP_BLUE_CENTRE:
-    .asciiz "sprites/cap_blue_centre.bmp"
+    .asciiz "sprites/entities/cap_blue_centre.bmp"
     .align 2
 F_CAP_GREEN_LEFT:
-    .asciiz "sprites/cap_green_left.bmp"
+    .asciiz "sprites/entities/cap_green_left.bmp"
     .align 2
 F_CAP_GREEN_RIGHT:
-    .asciiz "sprites/cap_green_right.bmp"
+    .asciiz "sprites/entities/cap_green_right.bmp"
     .align 2
 F_CAP_GREEN_TOP:
-    .asciiz "sprites/cap_green_top.bmp"
+    .asciiz "sprites/entities/cap_green_top.bmp"
     .align 2
 F_CAP_GREEN_BOTTOM:
-    .asciiz "sprites/cap_green_bottom.bmp"
+    .asciiz "sprites/entities/cap_green_bottom.bmp"
     .align 2
 F_CAP_GREEN_CENTRE:
-    .asciiz "sprites/cap_green_centre.bmp"
+    .asciiz "sprites/entities/cap_green_centre.bmp"
     .align 2
 F_CAP_RED_LEFT:
-    .asciiz "sprites/cap_red_left.bmp"
+    .asciiz "sprites/entities/cap_red_left.bmp"
     .align 2
 F_CAP_RED_RIGHT:
-    .asciiz "sprites/cap_red_right.bmp"
+    .asciiz "sprites/entities/cap_red_right.bmp"
     .align 2
 F_CAP_RED_TOP:
-    .asciiz "sprites/cap_red_top.bmp"
+    .asciiz "sprites/entities/cap_red_top.bmp"
     .align 2
 F_CAP_RED_BOTTOM:
-    .asciiz "sprites/cap_red_bottom.bmp"
+    .asciiz "sprites/entities/cap_red_bottom.bmp"
     .align 2
 F_CAP_RED_CENTRE:
-    .asciiz "sprites/cap_red_centre.bmp"
+    .asciiz "sprites/entities/cap_red_centre.bmp"
     .align 2
 CAP_BLUE:         # capsule pixel array; each pixel is 4 bytes \\
-    .space 1280   # 256 * 5 = 1280; we store the bitmap in order \\
+    .space 1280   # 8 * 8 * 4 * 5 = 1280; we store the bitmap in order \\
 CAP_GREEN:        # [left, right, up, down, centre]
     .space 1280
 CAP_RED:
     .space 1280
 
 F_VIRUS_BLUE:
-    .asciiz "sprites/virus_blue.bmp"
+    .asciiz "sprites/entities/virus_blue.bmp"
     .align 2
 F_VIRUS_GREEN:
-    .asciiz "sprites/virus_green.bmp"
+    .asciiz "sprites/entities/virus_green.bmp"
     .align 2
 F_VIRUS_RED:
-    .asciiz "sprites/virus_red.bmp"
+    .asciiz "sprites/entities/virus_red.bmp"
     .align 2
 VIRUS_BLUE:      # virus pixel array; each pixel is 4 bytes, and \\
     .space 256   # the dimensions of the sprite are TILE_SIZE x TILE_SIZE \\
@@ -98,6 +98,45 @@ VIRUS_GREEN:     # so that our size is 8 * 8 * 4 = 256
     .space 256
 VIRUS_RED:
     .space 256
+
+F_DIGIT_0:       # because of limitations on fread, we must store each digit \\
+    .asciiz "sprites/digits/0.bmp" # digit in its own file, tragically :(
+    .align 2
+F_DIGIT_1:
+    .asciiz "sprites/digits/1.bmp"
+    .align 2
+F_DIGIT_2:
+    .asciiz "sprites/digits/2.bmp"
+    .align 2
+F_DIGIT_3:
+    .asciiz "sprites/digits/3.bmp"
+    .align 2
+F_DIGIT_4:
+    .asciiz "sprites/digits/4.bmp"
+    .align 2
+F_DIGIT_5:
+    .asciiz "sprites/digits/5.bmp"
+    .align 2
+F_DIGIT_6:
+    .asciiz "sprites/digits/6.bmp"
+    .align 2
+F_DIGIT_7:
+    .asciiz "sprites/digits/7.bmp"
+    .align 2
+F_DIGIT_8:
+    .asciiz "sprites/digits/8.bmp"
+    .align 2
+F_DIGIT_9:
+    .asciiz "sprites/digits/9.bmp"
+    .align 2
+DIGITS:          # pixel contiguous list of pixel arrays; each pixel is 4 \\
+    .space 5120  # bytes, and the dimension of each of 10 digits is \\
+                 # TILE_SIZE x 2 TILE_SIZE so array size is 8 * 16 * 4 * 10 = 5120 
+F_SCOREBOARD:
+    .asciiz "sprites/scoreboard.bmp"
+    .align 2
+SCOREBOARD:      # space for 4 digits, so 4 * sizeof(DIGITS)
+    .space 2048
 
 ##############################################################################
 # Immutable Data
@@ -116,18 +155,28 @@ BOTTLE_HEIGHT:      # number of tiles in a bottle column
     .word 16
 BOTTLE_OFFSET:      # the (x, y) starting position of the bottle's \\
     .word 0x400048  # interior, in pixels; equates to (x, y) = (96, 64)
+PREVIEW_OFFSET:     # the (x, y) starting position of the preview capsule \\
+    .word 0xa80080  # in pixels; equates to (168, 120)
+SCORE_OFFSET:       # the (x, y) starting position of the scoreboard \\
+    .word 0xb80038  # for current score; equates to (176, 56)
+
 VIRUS_CAP:          # number of viruses to spawn at game start
     .word 4
 VIRUS_YLIM:         # greatest height from the bottom of the bottle
     .word 10        # that a virus may spawn
-PREVIEW_OFFSET:     # the (x, y) starting position of the preview capsule \\
-    .word 0xa80080  # in pixels; equates to (176, 120)
+
 SLEEP_TIME:         # time to sleep between frames by default
     .word 16
 DELTA_CAP_DEFAULT:  # time interval between gravity applications \\
-    .word 1000     # by default
+    .word 1000       # by default
 DELTA_CAP_ACCEL:    # time interval between gravity applications \\
-    .word 180     # when accelerated by user input
+    .word 180       # when accelerated by user input
+
+VIRUS_CLEAR_PTS:    # points received for clearing a virus
+    .word 500
+CAPSULE_CLEAR_PTS:  # points receieved for clearing a capsule
+    .word 25
+
 ADDR_DSPL:          # address of the bitmap display
     .word 0x10008000
 ADDR_KBRD:          # address of the keyboard; queue of key presses
@@ -141,10 +190,6 @@ ADDR_KBRD_HOLD:     # address of the keyboard for key hold -- offset by \\
 BOTTLE:             # BOTTLE_WIDTH * BOTTLE_HEIGHT * 1 byte per tile
     .space 128      # this is an array containing the contents of the bottle \\
                     # i.e. viruses and capsules that have landed
-BOTTLE_DSPL_BUF:    # buffer to draw all bottle entities and grid, \\
-    .space 32768    # which will then be drawn to the display; this \\
-                    # is used to remove flickering; we compute with \\
-                    # TILE_SIZE^2 * BOTTLE_WIDTH * BOTTLE_HEIGHT * 4 bytes per pixel
 # each byte in this array carries three pieces of information:
 # [ direction | colour | type  ]
 # [ 4 bits    | 3 bits | 1 bit ]
@@ -167,6 +212,10 @@ BOTTLE_DSPL_BUF:    # buffer to draw all bottle entities and grid, \\
 # type is a single bit: 0 if entity is a virus, 1 if it is a capsule;
 # a virus utilizes the colour field, but the direction field MUST BE 0x00
 # if the entire entity is 0x00, there is nothing at this position
+BOTTLE_DSPL_BUF:    # buffer to draw all bottle entities and grid, \\
+    .space 32768    # which will then be drawn to the display; this \\
+                    # is used to remove flickering; we compute with \\
+                    # TILE_SIZE^2 * BOTTLE_WIDTH * BOTTLE_HEIGHT * 4 bytes per pixel
 
 CAPSULE_P1:         # position of first and second half of player capsule, \\ 
     .space 4        # resp, as tile coordinates in the bottle grid. \\
@@ -194,6 +243,13 @@ TIMESTAMP:          # the last time measured on the most recent time syscall
 VIRUS_COUNT:        # the number of viruses remaining on the bottle grid
     .word 4
 
+SCORE:              # player score
+    .word 0
+SCORE_DISPL_BUF:    # buffer to draw all digits of player score, \\
+    .space 2048     # which will then be drawn to the display; this \\
+                    # is used to remove flickering; we compute with \\
+                    # TILE_SIZE * ( 2 TILE_SIZE ) * 4 * 4 bytes per pixel
+    
 GARBAGE:
     .space 32
 BITMAP_OFFSET:
@@ -261,7 +317,6 @@ init_bottle:
     j init_bottle_loop
   init_bottle_exit:
     jr $ra
-    
 
 ## Load all pixel arrays into process memory from the set of bitmaps.
 # This function takes no arguments.
@@ -277,7 +332,8 @@ init_bmp:
     la $a1, BOTTLE_GRID_IMG    # displayed behing the bottle entities
     li $a2, 32768              # BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE^2 * 4
     jal load_bmp
-    
+
+    #################
     lw $s2, TILE_SIZE          # determine the number of pixels occupied by a tile sprite \\
     mult $s2, $s2              # (ie viruses and capsules); as each pixel occupies 4 bytes, \\
     mflo $s2                   # $s2 = array size = TILE_SIZE * TILE_SIZE * 4
@@ -387,6 +443,77 @@ init_bmp:
     la $a1, VIRUS_RED
     move $a2, $s2
     jal load_bmp
+
+    #################
+    lw $s2, TILE_SIZE        # determine the number of pixels occupied by a digit \\
+    mult $s2, $s2            # (ie viruses and capsules); as each pixel occupies 4 bytes, \\
+    mflo $s2                 # $s2 = array size = TILE_SIZE * ( 2 * TILE_SIZE ) * 4,
+    sll $s2, $s2, 3          # because a digit is 1 x 2 tiles
+
+    la $s0, DIGITS           # read in the list of digit pixel arrays, digit by digit
+    la $a0, F_DIGIT_0
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_1
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+    
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_2
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+    
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_3
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+    
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_4
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+    
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_5
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+    
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_6
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+    
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_7
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+    
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_8
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+    
+    add $s0, $s0, $s2
+    la $a0, F_DIGIT_9
+    move $a1, $s0
+    move $a2, $s2
+    jal load_bmp
+
+    la $a0, F_SCOREBOARD
+    la $a1, SCOREBOARD
+    sll $a2, $s2, 2          # we display 4 digits in scoreboard, so 4 times size \\
+    jal load_bmp             # of one digit
 
     jr $s1
 
@@ -928,14 +1055,12 @@ displace_solo:
     pop ($ra)                    # load the return address from the stack
     jr $ra
 
-# process_cascade function
- # Handles the cascade effect - checking for matches, applying gravity, and repeating
- # until no more matches are found
- process_cascade:
-     addi $sp, $sp, -4       # Save return address
-     sw $ra, 0($sp)
+## Handles the cascade effect - checking for matches, applying gravity,
+## and repeating until no more matches are found.
+process_cascade:
+     push ($ra)                 # store the return address on the stack
      
- cascade_loop:
+   cascade_loop:
      # Check for matches and clear them
      jal check_matches
      beq $v0, $zero, cascade_exit   # If no matches found, we're done
@@ -962,18 +1087,15 @@ displace_solo:
      # Repeat until no more matches are found
      j cascade_loop
      
- cascade_exit:
-     lw $ra, 0($sp)          # Restore return address
-     addi $sp, $sp, 4
+   cascade_exit:
+     pop ($ra)               # restore return address
      jr $ra                  # Return to caller
      
- # check_matches function
- # Checks for horizontal and vertical matches of 4+ of the same color
- # Returns:
- # - $v0: 1 if matches were found and cleared, 0 otherwise
- check_matches:
-     addi $sp, $sp, -4       # Save return address
-     sw $ra, 0($sp)
+## Checks for horizontal and vertical matches of 4+ of the same color
+# Returns:
+# - $v0 : 1 if matches were found and cleared, 0 otherwise
+check_matches:
+     push ($ra)              # save return address
      
      # Initialize return value to 0 (no matches found yet)
      li $v0, 0
@@ -1196,16 +1318,15 @@ displace_solo:
      
  check_vert_done:
      # Finished checking, return to caller
-     lw $ra, 0($sp)          # Restore return address
-     addi $sp, $sp, 4
+     pop ($ra)               # restore return address from stack
      jr $ra                  # Return to caller
      # apply_gravity function
- # Makes floating capsules fall until they hit an obstacle
- # Returns:
- # - $v0: 1 if any capsules fell, 0 otherwise
- apply_gravity:
-     addi $sp, $sp, -4       # Save return address
-     sw $ra, 0($sp)
+
+## Makes floating capsules fall until they hit an obstacle.
+# Returns:
+# - $v0: 1 if any capsules fell, 0 otherwise
+apply_gravity:
+     push ($ra)              # save return address on stack
      
      li $v0, 0               # Default: nothing fell
      
@@ -1269,21 +1390,24 @@ displace_solo:
      j gravity_row_loop
      
  gravity_exit:
-     lw $ra, 0($sp)          # Restore return address
-     addi $sp, $sp, 4
+     pop ($ra)               # restore return address
      jr $ra                  # Return to caller
 
-## Reload the contents of BOTTLE_GRID into BOTTLE_DSPL_BUF. This procedure
-## should be called on every frame prior to adding grid entitites to the buf.
-# Takes in no parameters.
-reset_dspl_buf:
-    la $t4, BOTTLE_GRID_IMG
-    la $t5, BOTTLE_DSPL_BUF
+## Copy a specified number of bytes from a source starting memory 
+## address to a target starting memory address.
+# This function does not touch the $s registers.
+# Takes in the following parameters:
+# - $a0 : the address of the source in memory
+# - $a1 : the address of the target in memory 
+# - $a2 : the number of bytes to copy from source to targed
+memcpy:
+    move $t4, $a0
+    move $t5, $a1
     
     li $t0, 0                    # set the loop variable
-    li $t1, 32768                # TILE_SIZE^2 * BOTTLE_HEIGHT * BOTTLE_WIDTH * 4
-  reset_dspl_buf_loop:
-    beq $t0, $t1, reset_dspl_buf_exit
+    move $t1, $a2                # TILE_SIZE^2 * BOTTLE_HEIGHT * BOTTLE_WIDTH * 4
+  memcpy_loop:
+    beq $t0, $t1, memcpy_exit
     
     lb $t3, 0($t4)
     sb $t3, 0($t5)
@@ -1292,8 +1416,8 @@ reset_dspl_buf:
     addi $t5, $t5, 1
     addi $t0, $t0, 1
   
-    j reset_dspl_buf_loop
-  reset_dspl_buf_exit:
+    j memcpy_loop
+  memcpy_exit:
     jr $ra
 
 ## Draw a the current state of the game, including the backdrop,
@@ -1305,10 +1429,110 @@ draw:
     push ($ra)               # save return address, as it will be overwritten in future calls
     
     # TODO: draw the doctor (only necessary if we choose to animate)
-    # TODO: draw the score on the score board
 
-    jal reset_dspl_buf      # reset the bottle display buffer prior to decorating it \\
-                            # with the player capsule and the grid entities
+    jal draw_scoreboard       # display the current player score
+    jal draw_preview          # display the preview for the next capsule
+    jal draw_bottle           # display the contents of the bottle grid
+
+  draw_return:
+    pop ($ra)               # reload the return address from the stack
+    jr $ra                  # return to the caller
+
+## Draw the game backdrop, including the bottle graphics and other statics.
+# Takes in no arguments.
+draw_backdrop:
+    push ($ra)               # store return address on stack
+  
+    la $a0, BACKDROP         # draw the backdrop
+    lw $a1, DISPLAY_HEIGHT   # backdrop takes up the entire display
+    lw $a2, DISPLAY_WIDTH    # the backdrop begins at the top-left \\
+    li $a3, 0x0              # of the display
+
+    lw $t0, DISPLAY_WIDTH    # the width of the draw region is DISPLAY_WIDTH
+    push ($t0)
+    lw $t0, ADDR_DSPL        # draw directly on the display
+    push ($t0)
+    jal draw_region
+
+    pop ($ra)                # retrieve return address from stack
+    jr $ra
+
+## Populates the SCORE_DISPL_BUF with the digits of the player score,
+## then draws the contents of SCORE_DISPL_BUF into the actual display.
+# Takes in no arguments.
+draw_scoreboard:
+    push ($ra)              # save the return address on the stack
+  
+    lw $s0, TILE_SIZE       # determine the number of pixels occupied by a digit \\
+    mult $s0, $s0           # (ie viruses and capsules); as each pixel occupies 4 bytes, \\
+    mflo $s0                # $s2 = array size = TILE_SIZE * ( 2 * TILE_SIZE ) * 4,
+    sll $s0, $s0, 3         # because a digit is 1 x 2 tiles
+    
+    la $a0, SCOREBOARD      # reset the scoreboard display buffer prior to decorating \\
+    la $a1, SCORE_DISPL_BUF # it with the constituent digits of the player score
+    sll $a2, $s0, 2         # DIGIT_SIZE * 4
+    jal memcpy
+
+    la $s7, DIGITS          # load the address of the pixel array we read from
+    lw $s1, SCORE           # begin parsing the player score
+    li $s2, 3               # set loop variable $s2 = i to iterate in [0, 3]
+    li $s3, 10              # we will be dividing by 10 frequently
+  draw_scoreboard_loop:
+    blt $s2, $zero, draw_scoreboard_loop_exit  # terminate when $s2 < 0
+
+    div $s1, $s3
+    mfhi $s4                # set $s4 = digit to be remainder of score / 10
+    mflo $s1                # set new score to be the quotient of score / 10
+
+    lw $t0, TILE_SIZE
+
+    mult $s0, $s4           # digit position in DIGITS is digit * digit size
+    mflo $a0                # we computed digit size as $s0 above
+    add $a0, $s7, $a0       # add this to the address of the buffer
+    sll $a1, $t0, 1         # a digit has twice the height of a tile
+    move $a2, $t0           # a digit has the width of a tile
+
+    # only the x-coordinate is variable; y is fixed as 0 for offset
+    mult $t0, $s2           # the offset of this drawing is determined by our
+    mflo $a3                # loop variable; it is i * TILE_SIZE for the x-coord
+    sll $a3, $a3, 16        # shift so that x coordinat is in upper half
+                            # of the byte to follow expected formatting
+
+    sll $t1, $t0, 2         # width of buffer is 4 times width of tile
+    push ($t1)
+    la $t1, SCORE_DISPL_BUF
+    push ($t1)
+
+    jal draw_region
+    
+    addi $s2, $s2, -1
+    j draw_scoreboard_loop
+  draw_scoreboard_loop_exit:
+    la $a0, SCORE_DISPL_BUF
+    lw $a1, TILE_SIZE
+    sll $a1, $a1, 1
+    lw $a2, TILE_SIZE
+    sll $a2, $a2, 2
+    lw $a3, SCORE_OFFSET
+    lw $t0, DISPLAY_WIDTH
+    push ($t0)
+    lw $t0, ADDR_DSPL
+    push ($t0)
+    jal draw_region
+
+    pop ($ra)               # retrieve the return address from the stack
+    jr $ra
+
+## Populates the BOTTLE_DSPL_BUF with the contents of the bottle, then
+## draws the contents of BOTTLE_DSPL_BUF into the actual display.
+# Takes in no arguments.
+draw_bottle:
+    push ($ra)                # store return address on the stack
+
+    la $a0, BOTTLE_GRID_IMG # reset the bottle display buffer prior to decorating it \\
+    la $a1, BOTTLE_DSPL_BUF # with the player capsule and the grid entities
+    li $a2, 32768           # TILE_SIZE^2 * BOTTLE_HEIGHT * BOTTLE_WIDTH * 4
+    jal memcpy
     
     la $t0, BOTTLE          # we begin drawing the bottle's contents
     li $t1, 0               # introduce a loop variable y = $t1
@@ -1375,58 +1599,25 @@ draw:
     move $a0, $t3             # draw the second half of the player capsule
     move $a1, $t1
     jal draw_entity
-
-    jal draw_bottle           # load all buffered content into the display
-
-    jal draw_preview          # display the preview for the next capsule
-
-  draw_return:
-    pop ($ra)               # reload the return address from the stack
-    jr $ra                  # return to the caller
-
-## Draw the game backdrop, including the bottle graphics and other statics.
-# Takes in no arguments.
-draw_backdrop:
-    push ($ra)               # store return address on stack
   
-    la $a0, BACKDROP         # draw the backdrop
-    lw $a1, DISPLAY_HEIGHT   # backdrop takes up the entire display
-    lw $a2, DISPLAY_WIDTH    # the backdrop begins at the top-left \\
-    li $a3, 0x0              # of the display
-
-    lw $t0, DISPLAY_WIDTH    # the width of the draw region is DISPLAY_WIDTH
-    push ($t0)
-    lw $t0, ADDR_DSPL        # draw directly on the display
-    push ($t0)
+    lw $t0, TILE_SIZE
+    la $a0, BOTTLE_DSPL_BUF   # address of pixel array to read from (buffer)
+    lw $a1, BOTTLE_HEIGHT     # height of region; this is HEIGHT * TILE_SIZE
+    mult $t0, $a1
+    mflo $a1
+    lw $a2, BOTTLE_WIDTH      # width of region; this is WIDTH * TILE_SIZE
+    mult $t0, $a2
+    mflo $a2
+    lw $a3, BOTTLE_OFFSET     # top-left corner of the region to draw on
+  
+    lw $t1, DISPLAY_WIDTH     # draw region width is DISPLAY_WIDTH
+    push ($t1)
+    lw $t1, ADDR_DSPL         # draw directly on the display
+    push ($t1)
     jal draw_region
-
-    pop ($ra)                # retrieve return address from stack
-    jr $ra
-
-## Draw the contents of BOTTLE_DSPL_BUF into the actual display. This 
-## simply applies the BOTTLE_OFFSET to the buffer and paints one-to-one.
-# Takes in no arguments.
-draw_bottle:
-  push ($ra)                # store return address on the stack
   
-  lw $t0, TILE_SIZE
-  la $a0, BOTTLE_DSPL_BUF   # address of pixel array to read from (buffer)
-  lw $a1, BOTTLE_HEIGHT     # height of region; this is HEIGHT * TILE_SIZE
-  mult $t0, $a1
-  mflo $a1
-  lw $a2, BOTTLE_WIDTH      # width of region; this is WIDTH * TILE_SIZE
-  mult $t0, $a2
-  mflo $a2
-  lw $a3, BOTTLE_OFFSET     # top-left corner of the region to draw on
-
-  lw $t1, DISPLAY_WIDTH     # draw region width is DISPLAY_WIDTH
-  push ($t1)
-  lw $t1, ADDR_DSPL         # draw directly on the display
-  push ($t1)
-  jal draw_region
-
-  pop ($ra)                 # retrieve return address from stack
-  jr $ra
+    pop ($ra)                 # retrieve return address from stack
+    jr $ra
 
 ## Given an entity byte, return the address of the first element for 
 ## the pixel array of corresponding to that entity byte.
@@ -1562,8 +1753,8 @@ draw_preview:
 # - $a3 : top-left corner of the region to draw on; this
 #         should be in format (x0, y0) = ($a3[7:4], $a3[3:0]);
 #         here, (x, y) is a pixel, not tile, coordinate
-# - 0($sp) : the address of the region to draw on
 # - 4($sp) : the width of the region to draw on, in pixels
+# - 0($sp) : the address of the region to draw on
 draw_region:
     pop ($t0)                   # begin working with drawing region
     pop ($t7)                   # load drawing region width
