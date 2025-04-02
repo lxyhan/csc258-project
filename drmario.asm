@@ -246,9 +246,9 @@ NEXT_E1:            # entity bytes for the first and second halves of the \\
 NEXT_E2:            # current player capsule lands
     .space 4
 
-TOUCHDOWN_LIST:     # list used in storing the entities that have just \\
+TOUCHDOWN_LIST:     # list used in storing positions of entities that have just \\
     .space 256      # landed on some surface (are no longer falling)
-CLEAR_LIST:         # list used in storing the entities that must be \\
+CLEAR_LIST:         # list used in storing positions of entities that must be \\
     .space 256      # removed from the playing grid
 
 DELTA_CAP:          # time interval between gravity applications
@@ -868,7 +868,7 @@ game_loop:
     lb $a1, CAPSULE_E2
     jal commit_to_bottle
     
-    jal process_cascade           # Process cascading matches and gravity
+    jal handle_touchdown         # Process cascading matches and gravity
     
     lw $t0, VIRUS_COUNT
     beq $t0, 0, exit        # if there are no more viruses, the game is won
@@ -1221,278 +1221,92 @@ displace_solo:
     pop ($ra)                    # load the return address from the stack
     jr $ra
 
-## Handles the cascade effect - checking for matches, applying gravity,
-## and repeating until no more matches are found.
-process_cascade:
-     push ($ra)                 # store the return address on the stack
-     
-   cascade_loop:
-     # Check for matches and clear them
-     jal check_matches
-     beq $v0, $zero, cascade_exit   # If no matches found, we're done
-     
-     # Draw the updated state (to show matches being cleared)
-     jal draw
-     
-     # Sleep briefly to make the clearing visible
-     li $v0, 32
-     li $a0, 300            # Sleep for 300ms
-     syscall
-     
-     # Apply gravity to make pieces fall
-     jal apply_gravity
-     
-     # Draw the updated state (to show pieces falling)
-     jal draw
-     
-     # Sleep briefly to make the falling visible
-     li $v0, 32
-     li $a0, 300            # Sleep for 300ms
-     syscall
-     
-     # Repeat until no more matches are found
-     j cascade_loop
-     
-   cascade_exit:
-     pop ($ra)               # restore return address
-     jr $ra                  # Return to caller
-     
-## Checks for horizontal and vertical matches of 4+ of the same color
-# Returns:
-# - $v0 : 1 if matches were found and cleared, 0 otherwise
-check_matches:
-     push ($ra)              # save return address
-     
-     # Initialize return value to 0 (no matches found yet)
-     li $v0, 0
-     
-     # Check for horizontal matches
-     li $t0, 0               # Row counter (y)
-     lw $t1, BOTTLE_HEIGHT   # Load bottle height for loop bound
-     
- check_horiz_loop_y:
-     bge $t0, $t1, check_horiz_done   # If y >= BOTTLE_HEIGHT, exit horizontal check
-     
-     li $t2, 0               # Column counter (x)
-     lw $t3, BOTTLE_WIDTH
-     addi $t3, $t3, -3       # Only need to check up to (width-3)
-     
- check_horiz_loop_x:
-     bgt $t2, $t3, check_horiz_next_y    # If x > (width-3), move to next row
-     
-     # Calculate position in bottle: (y * width + x)
-     la $t4, BOTTLE          # Base address of bottle
-     lw $t5, BOTTLE_WIDTH
-     mult $t0, $t5           # y * width
-     mflo $t5
-     add $t5, $t5, $t2       # y * width + x
-     add $t4, $t4, $t5       # Address of current position
-     
-     # Load the entity at current position
-     lb $t5, 0($t4)
-     
-     # Skip if empty
-     beq $t5, $zero, check_horiz_next_x
-     
-     # Extract color bits (bits 1-3)
-     andi $t6, $t5, 0x0E
-     
-     # Check next 3 positions for same color
-     lb $t7, 1($t4)          # Load entity at x+1
-     beq $t7, $zero, check_horiz_next_x  # Skip if empty
-     andi $t8, $t7, 0x0E     # Get color
-     bne $t8, $t6, check_horiz_next_x  # Skip if color doesn't match
-     
-     lb $t7, 2($t4)          # Load entity at x+2
-     beq $t7, $zero, check_horiz_next_x  # Skip if empty
-     andi $t8, $t7, 0x0E     # Get color
-     bne $t8, $t6, check_horiz_next_x  # Skip if color doesn't match
-     
-     lb $t7, 3($t4)          # Load entity at x+3
-     beq $t7, $zero, check_horiz_next_x  # Skip if empty
-     andi $t8, $t7, 0x0E     # Get color
-     bne $t8, $t6, check_horiz_next_x  # Skip if color doesn't match
-     
-     # We found a match! Set return value to 1
-     li $v0, 1
-     
-     # Check and update virus count if any are viruses
-     lb $t7, 0($t4)
-     andi $t8, $t7, 0x01     # Type bit (0=virus, 1=capsule)
-     bne $t8, $zero, skip_h_virus1  # Skip if it's a capsule
-     lw $t9, VIRUS_COUNT
-     addi $t9, $t9, -1       # Decrement virus count
-     sw $t9, VIRUS_COUNT
- skip_h_virus1:
-     
-     lb $t7, 1($t4)
-     andi $t8, $t7, 0x01
-     bne $t8, $zero, skip_h_virus2
-     lw $t9, VIRUS_COUNT
-     addi $t9, $t9, -1
-     sw $t9, VIRUS_COUNT
- skip_h_virus2:
-     
-     lb $t7, 2($t4)
-     andi $t8, $t7, 0x01
-     bne $t8, $zero, skip_h_virus3
-     lw $t9, VIRUS_COUNT
-     addi $t9, $t9, -1
-     sw $t9, VIRUS_COUNT
- skip_h_virus3:
-     
-     lb $t7, 3($t4)
-     andi $t8, $t7, 0x01
-     bne $t8, $zero, skip_h_virus4
-     lw $t9, VIRUS_COUNT
-     addi $t9, $t9, -1
-     sw $t9, VIRUS_COUNT
- skip_h_virus4:
-     
-     # Now clear the 4 matched entities
-     sb $zero, 0($t4)
-     sb $zero, 1($t4)
-     sb $zero, 2($t4)
-     sb $zero, 3($t4)
-     
- check_horiz_next_x:
-     addi $t2, $t2, 1        # Next column
-     j check_horiz_loop_x
-     
- check_horiz_next_y:
-     addi $t0, $t0, 1        # Next row
-     j check_horiz_loop_y
-     
- check_horiz_done:
-     # Now check for vertical matches
-     li $t2, 0               # Column counter (x)
-     lw $t3, BOTTLE_WIDTH
-     
- check_vert_loop_x:
-     bge $t2, $t3, check_vert_done   # If x >= BOTTLE_WIDTH, exit vertical check
-     
-     li $t0, 0               # Row counter (y)
-     lw $t1, BOTTLE_HEIGHT
-     addi $t1, $t1, -3       # Only need to check up to (height-3)
-     
- check_vert_loop_y:
-     bgt $t0, $t1, check_vert_next_x   # If y > (height-3), move to next column
-     
-     # Calculate position: (y * width + x)
-     la $t4, BOTTLE
-     lw $t5, BOTTLE_WIDTH
-     mult $t0, $t5
-     mflo $t5
-     add $t5, $t5, $t2
-     add $t4, $t4, $t5       # Address of current position
-     
-     # Load entity at current position
-     lb $t5, 0($t4)
-     
-     # Skip if empty
-     beq $t5, $zero, check_vert_next_y
-     
-     # Extract color
-     andi $t6, $t5, 0x0E
-     
-     # Check next 3 positions below for same color
-     lw $t9, BOTTLE_WIDTH
-     
-     add $t7, $t4, $t9       # Address of (x, y+1)
-     lb $t8, 0($t7)
-     beq $t8, $zero, check_vert_next_y  # Skip if empty
-     andi $t8, $t8, 0x0E
-     bne $t8, $t6, check_vert_next_y    # Skip if color doesn't match
-     
-     add $t7, $t7, $t9       # Address of (x, y+2)
-     lb $t8, 0($t7)
-     beq $t8, $zero, check_vert_next_y  # Skip if empty
-     andi $t8, $t8, 0x0E
-     bne $t8, $t6, check_vert_next_y    # Skip if color doesn't match
-     
-     add $t7, $t7, $t9       # Address of (x, y+3)
-     lb $t8, 0($t7)
-     beq $t8, $zero, check_vert_next_y  # Skip if empty
-     andi $t8, $t8, 0x0E
-     bne $t8, $t6, check_vert_next_y    # Skip if color doesn't match
-     
-     # We found a match! Set return value to 1
-     li $v0, 1
-     
-     jal play_clear_sound
-     
-     # Check and update virus count if any are viruses
-     lb $t7, 0($t4)
-     andi $t8, $t7, 0x01     # Type bit (0=virus, 1=capsule)
-     bne $t8, $zero, skip_v_virus1  # Skip if it's a capsule
-     lw $t9, VIRUS_COUNT
-     addi $t9, $t9, -1       # Decrement virus count
-     sw $t9, VIRUS_COUNT
- skip_v_virus1:
-     
-     lw $t9, BOTTLE_WIDTH
-     add $t7, $t4, $t9       # Address of (x, y+1)
-     lb $t8, 0($t7)
-     andi $t8, $t8, 0x01
-     bne $t8, $zero, skip_v_virus2
-     lw $t9, VIRUS_COUNT
-     addi $t9, $t9, -1
-     sw $t9, VIRUS_COUNT
- skip_v_virus2:
-     
-     lw $t9, BOTTLE_WIDTH
-     add $t7, $t4, $t9       # (x, y+1)
-     add $t7, $t7, $t9       # (x, y+2)
-     lb $t8, 0($t7)
-     andi $t8, $t8, 0x01
-     bne $t8, $zero, skip_v_virus3
-     lw $t9, VIRUS_COUNT
-     addi $t9, $t9, -1
-     sw $t9, VIRUS_COUNT
- skip_v_virus3:
-     
-     lw $t9, BOTTLE_WIDTH
-     add $t7, $t4, $t9       # (x, y+1)
-     add $t7, $t7, $t9       # (x, y+2)
-     add $t7, $t7, $t9       # (x, y+3)
-     lb $t8, 0($t7)
-     andi $t8, $t8, 0x01
-     bne $t8, $zero, skip_v_virus4
-     lw $t9, VIRUS_COUNT
-     addi $t9, $t9, -1
-     sw $t9, VIRUS_COUNT
- skip_v_virus4:
-     
-     # Now clear the 4 matched entities
-     sb $zero, 0($t4)
-     
-     lw $t9, BOTTLE_WIDTH
-     add $t7, $t4, $t9       # (x, y+1)
-     sb $zero, 0($t7)
-     
-     add $t7, $t7, $t9       # (x, y+2)
-     sb $zero, 0($t7)
-     
-     add $t7, $t7, $t9       # (x, y+3)
-     sb $zero, 0($t7)
-     
- check_vert_next_y:
-     addi $t0, $t0, 1        # Next row
-     j check_vert_loop_y
-     
- check_vert_next_x:
-     addi $t2, $t2, 1        # Next column
-     j check_vert_loop_x
-     
- check_vert_done:
-     # Finished checking, return to caller
-     pop ($ra)               # restore return address from stack
-     jr $ra                  # Return to caller
-     # apply_gravity function
+## Handles the behaviour triggered when the player lands their capsule. 
+## First checks for any clears, then handles the cascade effects if any,
+## then repeats until there is nothing left to update (ie clear or apply 
+## gravity to.
+handle_touchdown:
+    push ($ra)                 # store the return address on the stack
 
-## Makes floating capsules fall until they hit an obstacle.
+    la $a0, TOUCHDOWN_LIST     # this function is called to handle events \\
+    lw $a1, CAPSULE_P1         # after the player has landed their capsule; \\
+    jal list_insert            # we thus store the 2 player capusule halves \\
+                               # as entities in the 'touchdown' phase
+    la $a0, TOUCHDOWN_LIST
+    lw $a1, CAPSULE_P2
+    jal list_insert
+
+  handle_touchdown_loop:
+    jal check_matches          # search for any matches made by entities in \\
+                               # the TOUCHDOWN_LIST
+    jal clear_matches          # clear any matches found in check_matches
+    jal apply_gravity          # apply gravity to anything that is suspended
+    push ($v0)                 # save whether apply_gravity did anything
+    
+    jal draw                   # draw the updated game state
+    li $v0, 32                 # sleep briefly to show the frame
+    lw $a0, DELTA_CAP_DEFAULT
+    syscall
+
+    pop ($t0)                  # if apply_gravity did something, keep going
+    beq $t0, 1, handle_touchdown_loop # this way we repeat until there is \\
+                                      # nothing left to update
+    
+    pop ($ra)                  # restore return address
+    jr $ra                     # return to caller
+ 
+## Checks for horizontal and vertical matches of 4+ of the same colour
+## for every element within the TOUCHDOWN_LIST.
+check_matches:
+    push ($ra)                # save return address
+    
+    move $s0, $zero           # introduce loop variable $s0
+    la $s7, TOUCHDOWN_LIST    # iterate over every element of the \\
+    jal list_size             # touchdown list
+    move $s1, $v0
+  match_tdwn_loop:
+    beq $s0, $s1, match_tdwn_loop_end  # terminate when every element has been read
+    
+    # read the colour of the current element in the touchdown list
+    move $a0, $s7 
+    move $a1, $s0
+    jal list_at               # fetch the element from the touchdown list
+
+    move $a0, $v0
+    jal load_byte_from_bottle # get the byte corresponding to the element
+    
+
+    move $s2, $zero           # let $s2 be the left walk length
+    walk_left:
+
+    walk_left_end:
+
+    move $s3, $zero           # let $s3 be the right walk length
+    walk_right:
+
+    walk_right_end:
+
+    addi $s0, $s0, 1          # increment the loop variable
+    j match_tdwn_loop
+  match_tdwn_loop_end:
+    la $s0, TOUCHDOWN_LIST    # clear the touchdown list when done
+    jal list_clear
+    
+    pop ($ra)
+    jr $ra
+
+## Clears all entities within the CLEAR_LIST from the BOTTLE. This will
+## animate the clear, and will update the SCORE to add the points assigned
+## to each entity that is cleared.
+clear_matches:
+    # NOTE TO SELF: if the thing being cleared is already 0, DO NOTHING!
+    #               otherwise we'll double count clears towards the score!
+
+## Bring down all suspended (unsupported) entities within the BOTTLE by
+## one tile. If this action causes the entity to become supported, the
+## entity is added to TOUCHDOWN_LIST
 # Returns:
-# - $v0: 1 if any capsules fell, 0 otherwise
+# - $v0 : 1 if any capsules fell, 0 otherwise
 apply_gravity:
      push ($ra)              # save return address on stack
      
@@ -1561,6 +1375,40 @@ apply_gravity:
      pop ($ra)               # restore return address
      jr $ra                  # Return to caller
 
+## Returns whether the entity at the given location is supported. An entity
+## is supported when it is a virus, there is something directly underneath
+## it, or it has a partnered entity (a capsule half) that is supported by
+## something other than the entity itself.
+## This function modifies only $t registers.
+# This function recieves the following parameter:
+# - $a0 : the position of the entity to check
+# Returns:
+# - $v0 : 1 if the entity is supported, 0 otherwise
+is_supported:
+
+
+## Given a position in the BOTTLE in format XXXX YYYY in hex, return the
+## corresponding entity byte.
+# Takes in the following parameter:
+# - $a0 : the position of the entity to be read 
+# Returns:
+# - $v0 : the entity BYTE at the given position
+load_byte_from_bottle:
+    andi $t2, $a0, 0xffff   # extract $t2 = y = lower 16 bits
+    andi $t1, $a0, 0xffff0000
+    srl $t1, $t1, 16        # extract $t1 = x = upper 16 bits
+
+    la $t0, BOTTLE          # load the bottle address for reading
+  
+    lw $t5, BOTTLE_WIDTH    # load information about (x, y) from the bottle;
+    mult $t5, $t2           # (x, y) information is stored at BOTTLE[x + y * BOTTLE_WIDTH] \\
+    mflo $t5                # because each entry occupies one byte
+    add $t5, $t5, $t1
+    add $t5, $t5, $t0
+    
+    lb $v0, 0($t5)
+    jr $ra
+
 ##############################################################################
 # Display Functions
 ##############################################################################
@@ -1568,7 +1416,7 @@ apply_gravity:
 ## Given the input pixel, returns a desaturated version of the pixel.
 ## This does not return anything, but mutates the pixel at the given address.
 # This function modifies only $t registers.
-# This function recieves the following argument:
+# This function recieves the following parameter:
 # - $a0 : the address of the first byte of the 4-byte pixel; the 
 #         pixel should be in form RRGGBBAA, where AA is ignored
 desaturate_px:
@@ -1622,7 +1470,7 @@ draw:
     jr $ra                  # return to the caller
 
 ## Draw the game backdrop, including the bottle graphics and other statics.
-# Takes in no arguments.
+# Takes in no parameters.
 draw_backdrop:
     push ($ra)               # store return address on stack
   
@@ -1642,7 +1490,7 @@ draw_backdrop:
 
 ## Populates the SCORE_DISPL_BUF with the digits of the player score,
 ## then draws the contents of SCORE_DISPL_BUF into the actual display.
-# Takes in no arguments.
+# Takes in no parameters.
 draw_scoreboard:
     push ($ra)              # save the return address on the stack
   
@@ -1708,7 +1556,7 @@ draw_scoreboard:
 
 ## Populates the BOTTLE_DSPL_BUF with the contents of the bottle, then
 ## draws the contents of BOTTLE_DSPL_BUF into the actual display.
-# Takes in no arguments.
+# Takes in no parameters.
 draw_bottle:
     push ($ra)                # store return address on the stack
 
@@ -1891,7 +1739,7 @@ draw_entity:
 
 ## Display the preview of the next capsule to be generated on the 
 ## play field. The entity bytes are extracted from NEXT_E1 and NEXT_E2.
-# Takes in no arguments.
+# Takes in no parameters.
 draw_preview:
     push ($ra)              # save return address on stack
   
