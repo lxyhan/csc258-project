@@ -18,87 +18,83 @@
     .data
 ##############################################################################
 ## Bitmap Assets
-##############################################################################ww
+##############################################################################
 DISPLAY_REGION_BUFFER:   # space allocated to avoid overlap between bitmap region
     .space 230000        # and .data segment in memory; DO NOT USE
 F_BACKDROP:
-<<<<<<< HEAD
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/bottle.bmp"
-=======
     .asciiz "sprites/backdrop.bmp"
->>>>>>> 88020b150d38ad8b46bedb3aee43e4be14d26bd6
     .align 2
 BACKDROP:           # capsule pixel array; each pixel is 4 bytes \\
-    .space 229376   # 256 * 244 * 4 = 229376
+    .space 229376   # DISPLAY_WIDTH * DISPLAY_WIDTH * 4 = 229376
 F_BOTTLE_GRID_IMG:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/grid.bmp"
+    .asciiz "sprites/grid.bmp"
     .align 2
 BOTTLE_GRID_IMG:
     .space 32768    # 4 * BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE ^ 2
 F_CAP_BLUE_LEFT:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_left.bmp"
+    .asciiz "sprites/entities/cap_blue_left.bmp"
     .align 2
 F_CAP_BLUE_RIGHT:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_right.bmp"
+    .asciiz "sprites/entities/cap_blue_right.bmp"
     .align 2
 F_CAP_BLUE_TOP:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_top.bmp"
+    .asciiz "sprites/entities/cap_blue_top.bmp"
     .align 2
 F_CAP_BLUE_BOTTOM:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_bottom.bmp"
+    .asciiz "sprites/entities/cap_blue_bottom.bmp"
     .align 2
 F_CAP_BLUE_CENTRE:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_centre.bmp"
+    .asciiz "sprites/entities/cap_blue_centre.bmp"
     .align 2
 F_CAP_GREEN_LEFT:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_left.bmp"
+    .asciiz "sprites/entities/cap_green_left.bmp"
     .align 2
 F_CAP_GREEN_RIGHT:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_right.bmp"
+    .asciiz "sprites/entities/cap_green_right.bmp"
     .align 2
 F_CAP_GREEN_TOP:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_top.bmp"
+    .asciiz "sprites/entities/cap_green_top.bmp"
     .align 2
 F_CAP_GREEN_BOTTOM:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_bottom.bmp"
+    .asciiz "sprites/entities/cap_green_bottom.bmp"
     .align 2
 F_CAP_GREEN_CENTRE:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_centre.bmp"
+    .asciiz "sprites/entities/cap_green_centre.bmp"
     .align 2
 F_CAP_RED_LEFT:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_left.bmp"
+    .asciiz "sprites/entities/cap_red_left.bmp"
     .align 2
 F_CAP_RED_RIGHT:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_right.bmp"
+    .asciiz "sprites/entities/cap_red_right.bmp"
     .align 2
 F_CAP_RED_TOP:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_top.bmp"
+    .asciiz "sprites/entities/cap_red_top.bmp"
     .align 2
 F_CAP_RED_BOTTOM:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_bottom.bmp"
+    .asciiz "sprites/entities/cap_red_bottom.bmp"
     .align 2
 F_CAP_RED_CENTRE:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_centre.bmp"
+    .asciiz "sprites/entities/cap_red_centre.bmp"
     .align 2
 CAP_BLUE:         # capsule pixel array; each pixel is 4 bytes \\
-    .space 1280   # 256 * 5 = 1280; we store the bitmap in order \\
-CAP_GREEN:       # [left, right, up, down, centre]
+    .space 1280   # 8 * 8 * 4 * 5 = 1280; we store the bitmap in order \\
+CAP_GREEN:        # [left, right, up, down, centre]
     .space 1280
 CAP_RED:
     .space 1280
 
 F_VIRUS_BLUE:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_blue.bmp"
+    .asciiz "sprites/entities/virus_blue.bmp"
     .align 2
 F_VIRUS_GREEN:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_green.bmp"
+    .asciiz "sprites/entities/virus_green.bmp"
     .align 2
 F_VIRUS_RED:
-    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_red.bmp"
+    .asciiz "sprites/entities/virus_red.bmp"
     .align 2
 VIRUS_BLUE:      # virus pixel array; each pixel is 4 bytes, and \\
     .space 256   # the dimensions of the sprite are TILE_SIZE x TILE_SIZE \\
-VIRUS_GREEN:    # so that our size is 8 * 8 * 4 = 256
+VIRUS_GREEN:     # so that our size is 8 * 8 * 4 = 256
     .space 256
 VIRUS_RED:
     .space 256
