@@ -1599,18 +1599,40 @@ is_supported:
     push ($ra)
     push ($a0)
     jal load_byte_from_bottle
-    move $t1, $v0
+    move $t1, $v0                    # let $t1 be our entity byte
 
-    pop ($t0)
     andi $t2, $t1, 0b1
+
+    pop ($t0)                        # must deload stack before attempting a return
     beq $t2, 0, is_supported_exit_1  # supported if virus
     # NOTE: the above will also handle the empty space situation
+    push ($t0)
+    push ($t1)
 
     addi $t0, $t0, 0b1
     move $a0, $t0
     jal validate                     # if some collision occurs underneath \\
+
+    pop ($t1)
+    pop ($t0)                        # must deload stack before attempting a return
     bne $v0, 2, is_supported_exit_1  # then the capsule half is supported
 
+    andi $t1, $t1, 0b1000000         # if we reach this point without a sibling, \\
+    beq $t1, 0b1000000, is_supported_exit_0 # we are unsupported
+    
+    move $a0, $t0                    # find the capsule half sibling
+    push ($t0)
+    jal find_sibling
+    pop ($t0)
+    move $t2, $v0
+
+    addi $t2, $t2, 0b1                # if the sibling has something underneath that \\ 
+    beq $t2, $t0, is_supported_exit_0 # is NOT the capsule itself, the whole structure is supported
+    move $a0, $t2
+    jal validate
+    bne $v0, 2, is_supported_exit_1
+
+  is_supported_exit_0:
     # exit with return value 0
     li $v0, 0
     pop($ra)
