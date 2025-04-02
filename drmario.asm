@@ -176,6 +176,8 @@ VIRUS_YLIM:         # greatest height from the bottom of the bottle
 
 SLEEP_TIME:         # time to sleep between frames by default
     .word 16
+SLEEP_TIME_CASCADE: # time to sleep between frames during cascade
+    .word 100
 DELTA_CAP_DEFAULT:  # time interval between gravity applications \\
     .word 1000       # by default
 DELTA_CAP_ACCEL:    # time interval between gravity applications \\
@@ -1227,36 +1229,6 @@ displace:
     pop ($ra)                       # load the return address from the stack
     jr $ra
 
-## Apply an input displacement to the target entity, and return
-## whether the change in position was successful. This function resembles
-## displace, but does not operate on the requirement that more than one 
-## entity (two capsule halves) must be validated prior to moving either.
-# Takes in the following parameters:
-# - $a0 : the address of the entity position to check for modification
-# - $a1 : the displacement to apply to the player capsule.
-# Returns:
-# - $v0 : whether the player capsule has been moved down; 1 if there
-#         was no collision, and 0 otherwise
-displace_solo:
-    push ($ra)                   # store the return address on the stack
-
-    move $s0, $a0
-    lw $s1, 0($s0)
-    add $s1, $s1, $a1            # apply displacement to the entity
-
-    move $a0, $s1                # check that the positions of the \\
-    jal validate                 # etnity is valid; if it is, commit \\
-    move $s2, $v0                # the changes to the provided location \\
-
-    li $v0, 0                         # set default return value to 0
-    bne $s2, 2, displace_solo_exit    # exit if the new position is invalid
-    
-    sw $s1, 0($s0)               # otherwise, commit the changes and \\
-    li $v0, 1                    # return 1
-  displace_solo_exit:
-    pop ($ra)                    # load the return address from the stack
-    jr $ra
-
 ## Handles the behaviour triggered when the player lands their capsule. 
 ## First checks for any clears, then handles the cascade effects if any,
 ## then repeats until there is nothing left to update (ie clear or apply 
@@ -1291,7 +1263,7 @@ handle_touchdown:
     
     jal draw                   # draw the updated game state
     li $v0, 32                 # sleep briefly to show the frame
-    lw $a0, DELTA_CAP_DEFAULT
+    lw $a0, SLEEP_TIME_CASCADE
     syscall
 
     pop ($v0)                  # if apply_gravity did something, keep going
@@ -1299,6 +1271,14 @@ handle_touchdown:
                                       # nothing left to update
 
   handle_touchdown_exit:
+    la $a0, CLEAR_LIST      # remove any remaining elements from the clear list
+    jal list_clear
+    
+    li $v0, 30              # reset timestamp so that we don't over-apply gravity
+    syscall                 # load system time into ($a1, $a0)
+    move $t1, $a0           # determine current timestamp
+    sw $t1, TIMESTAMP       # update timestamp
+    
     pop ($ra)                  # restore return address
     jr $ra                     # return to caller
  
@@ -1492,11 +1472,10 @@ clear_matches:
     j clear_match_loop
   clear_match_loop_end:
 
-    lw $t0, CAPSULE_P1
-    # TODO: PLAY A SOUND
+    jal play_clear_sound
     jal draw                 # draw the new animated clear state
     li $v0, 32               # sleep briefly to show the frame
-    lw $a0, DELTA_CAP_DEFAULT
+    lw $a0, SLEEP_TIME_CASCADE
     syscall
     
     move $a0, $s7
@@ -1510,83 +1489,137 @@ clear_matches:
 # Returns:
 # - $v0 : 1 if any capsules fell, 0 otherwise
 apply_gravity:
-     push ($ra)              # save return address on stack
-     
-     li $v0, 0               # Default: nothing fell
-     
-     # We'll need multiple passes through the grid to ensure all pieces fall fully
-     li $t9, 1               # Set flag to indicate we need to keep checking
-     
- gravity_outer_loop:
-     beq $t9, $zero, gravity_exit  # If no pieces fell in the last pass, we're done
-     
-     li $t9, 0               # Reset the flag for this pass
-     
-     # Start from second-to-last row (bottom row can't fall further)
-     lw $t0, BOTTLE_HEIGHT   
-     addi $t0, $t0, -2       # Start at height-2
-     
- gravity_row_loop:
-     bltz $t0, gravity_outer_loop  # If we've gone through all rows, start a new pass
-     
-     li $t1, 0               # Column counter
-     lw $t2, BOTTLE_WIDTH    
-     
- gravity_col_loop:
-     bge $t1, $t2, gravity_next_row  # If done with this row, go to next row up
-     
-     # Calculate position: BOTTLE + (y * width + x)
-     la $t3, BOTTLE
-     lw $t4, BOTTLE_WIDTH
-     mult $t0, $t4
-     mflo $t4
-     add $t4, $t4, $t1
-     add $t3, $t3, $t4       # Current position address
-     
-     # Load entity at current position
-     lb $t4, 0($t3)
-     
-     # Skip if empty
-     beq $t4, $zero, gravity_next_col
-     
-     # Check if it's a capsule (not a virus)
-     andi $t5, $t4, 0x01     # Type bit (0=virus, 1=capsule)
-     beq $t5, $zero, gravity_next_col  # Skip if it's a virus (viruses don't fall)
-     
-     # Check if the space below is empty
-     lw $t6, BOTTLE_WIDTH
-     add $t7, $t3, $t6       # Address of position below
-     lb $t8, 0($t7)          # Entity below
-     bne $t8, $zero, gravity_next_col  # Skip if space below is not empty
-     
-     # Space below is empty, make this capsule part fall
-     sb $t4, 0($t7)          # Copy entity to position below
-     sb $zero, 0($t3)        # Clear current position
-     li $v0, 1               # Set return value to indicate something fell
-     li $t9, 1               # Set flag to indicate we need another pass
-     
- gravity_next_col:
-     addi $t1, $t1, 1        # Next column
-     j gravity_col_loop
-     
- gravity_next_row:
-     addi $t0, $t0, -1       # Move up one row (decreasing y)
-     j gravity_row_loop
-     
- gravity_exit:
-     pop ($ra)               # restore return address
-     jr $ra                  # Return to caller
+    push ($ra)
+    li $s7, 0               # set the default return to "no capsules fell"
+
+    lw $s1 BOTTLE_HEIGHT    # introduce a loop variable y = $t1
+    addi $s1, $s1, -1       # this loop variable starts at BOTTLE_HEIGHT - 1
+  app_gravity_loop_y:
+    blt $s1, $zero, app_gravity_loop_y_end   # terminate the loop once we read all rows
+                                             # as we are reading from bottom to top, this \\
+                                             # is once y < 0
+    
+    li $s3, 0               # introduce a loop variable x = $t3
+    lw $s4, BOTTLE_WIDTH    # x is bound above by the bottle width
+  app_gravity_loop_x:
+    beq $s3, $s4, app_gravity_loop_x_end   # terminate the loop once we read this row
+
+    move $s6, $s3           # our tile coordinate is (x, y) = ($t3, $t1); format \\
+    sll $s6, $s6, 16        # this as XXXX YYYY so that it can be fed into other functions
+    add $s6, $s6, $s1
+
+    move $a0, $s6
+    jal is_supported
+    beq $v0, 1, app_gravity_block_supported
+    
+    # if we get here, the block is unsupported
+    li $s7, 1          # indicate that we have an unsupported block that will fall
+
+    move $a0, $s6
+    jal load_byte_from_bottle
+    move $s5, $v0                        # let $s5 = entity byte
+    andi $t0, $s5, 0b1000000             # do nothing if there is no sibling; note that \\
+    beq $t0, 0b1000000, move_entity_down # if we get here block not supported, so not virus
+
+    # if we get here, the block has a sibling
+    # set the block to abandoned
+    andi $s5, $s5, 0x0f       # clear directional information on block
+    ori $s5, $s5, 0x40        # update directional info to be abandoned
+
+    move $a0, $s6             # set sibling position for modification
+    move $a1, $s5             # set updated entity byte
+    jal set_byte_to_bottle
+
+    # now set the sibling to abandoned also
+    move $a0, $s6
+    jal find_sibling
+    move $s5, $v0
+    
+    move $a0, $s5
+    jal load_byte_from_bottle # load the sibling's entity byte
+    move $t0, $v0
+    
+    andi $t0, $t0, 0x0f       # clear directional information
+    ori $t0, $t0, 0x40        # update directional info to be abandoned
+
+    move $a0, $s5             # set sibling position for modification
+    move $a1, $t0             # set updated entity byte
+    jal set_byte_to_bottle
+
+    move_entity_down:
+    move $a0, $s6
+    jal load_byte_from_bottle
+    move $s5, $v0            # let $s5 = entity byte
+
+    move $a0, $s6
+    li $a1, 0
+    jal set_byte_to_bottle   # set byte at current position to 0
+
+    addi $s6, $s6, 0b1       # change the position by 1 down 
+    move $a0, $s6            # set position to change
+    move $a1, $s5            # set byte to change to
+    jal set_byte_to_bottle   # load the entity byte into the position underneath
+
+    # check if entity now has something underneath it (does it trigger touchdown?)
+    addi $s5, $s6, 0b1       # change the position by 1 down AGAIN
+    move $a0, $s5
+    jal validate
+    beq $v0, 2, app_gravity_block_supported
+
+    # if we get here, the block triggers touchdown; add it to touchdown list!
+    la $a0, TOUCHDOWN_LIST
+    move $a1, $s6
+    jal list_insert
+    
+  app_gravity_block_supported:
+    addi $s3, $s3, 1        # increment the loop variable
+    j app_gravity_loop_x
+    
+  app_gravity_loop_x_end:
+    addi $s1, $s1, -1       # decrement the loop variable
+    j app_gravity_loop_y
+  app_gravity_loop_y_end:
+    
+  gravity_exit:
+    move $v0, $s7
+    pop ($ra)               # restore return address
+    jr $ra                  # return to caller
 
 ## Returns whether the entity at the given location is supported. An entity
 ## is supported when it is a virus, there is something directly underneath
 ## it, or it has a partnered entity (a capsule half) that is supported by
-## something other than the entity itself.
+## something other than the entity itself. The function trivially returns
+## supported if there is nothing at the position given.
 ## This function modifies only $t registers.
 # This function receives the following parameter:
 # - $a0 : the position of the entity to check
 # Returns:
 # - $v0 : 1 if the entity is supported, 0 otherwise
 is_supported:
+    push ($ra)
+    push ($a0)
+    jal load_byte_from_bottle
+    move $t1, $v0
+
+    pop ($t0)
+    andi $t2, $t1, 0b1
+    beq $t2, 0, is_supported_exit_1  # supported if virus
+    # NOTE: the above will also handle the empty space situation
+
+    addi $t0, $t0, 0b1
+    move $a0, $t0
+    jal validate                     # if some collision occurs underneath \\
+    bne $v0, 2, is_supported_exit_1  # then the capsule half is supported
+
+    # exit with return value 0
+    li $v0, 0
+    pop($ra)
+    jr $ra
+
+  is_supported_exit_1:
+    li $v0, 1
+    pop ($ra)
+    jr $ra
 
 ## Walk in the given direction from the starting position until we reach
 ## the boundary of the playing grid, reach an empty spot, or reach an 
