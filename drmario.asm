@@ -4,7 +4,7 @@
 # Student 1: Stefan Barna, 1010257758
 # Student 2: James Han, 1010051989
 #
-# We assert that the code submitted here is entirely our own 
+# We assert that the code submitted here is entirely our own w
 # creation, and will indicate otherwise when it is not.
 #
 ######################## Bitmap Display Configuration ########################
@@ -18,83 +18,83 @@
     .data
 ##############################################################################
 ## Bitmap Assets
-##############################################################################
+##############################################################################ww
 DISPLAY_REGION_BUFFER:   # space allocated to avoid overlap between bitmap region
     .space 230000        # and .data segment in memory; DO NOT USE
 F_BACKDROP:
-    .asciiz "sprites/bottle.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/bottle.bmp"
     .align 2
 BACKDROP:           # capsule pixel array; each pixel is 4 bytes \\
-    .space 229376   # DISPLAY_WIDTH * DISPLAY_WIDTH * 4 = 229376
+    .space 229376   # 256 * 244 * 4 = 229376
 F_BOTTLE_GRID_IMG:
-    .asciiz "sprites/grid.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/grid.bmp"
     .align 2
 BOTTLE_GRID_IMG:
     .space 32768    # 4 * BOTTLE_WIDTH * BOTTLE_HEIGHT * TILE_SIZE ^ 2
 F_CAP_BLUE_LEFT:
-    .asciiz "sprites/entities/cap_blue_left.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_left.bmp"
     .align 2
 F_CAP_BLUE_RIGHT:
-    .asciiz "sprites/entities/cap_blue_right.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_right.bmp"
     .align 2
 F_CAP_BLUE_TOP:
-    .asciiz "sprites/entities/cap_blue_top.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_top.bmp"
     .align 2
 F_CAP_BLUE_BOTTOM:
-    .asciiz "sprites/entities/cap_blue_bottom.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_bottom.bmp"
     .align 2
 F_CAP_BLUE_CENTRE:
-    .asciiz "sprites/entities/cap_blue_centre.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_blue_centre.bmp"
     .align 2
 F_CAP_GREEN_LEFT:
-    .asciiz "sprites/entities/cap_green_left.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_left.bmp"
     .align 2
 F_CAP_GREEN_RIGHT:
-    .asciiz "sprites/entities/cap_green_right.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_right.bmp"
     .align 2
 F_CAP_GREEN_TOP:
-    .asciiz "sprites/entities/cap_green_top.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_top.bmp"
     .align 2
 F_CAP_GREEN_BOTTOM:
-    .asciiz "sprites/entities/cap_green_bottom.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_bottom.bmp"
     .align 2
 F_CAP_GREEN_CENTRE:
-    .asciiz "sprites/entities/cap_green_centre.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_green_centre.bmp"
     .align 2
 F_CAP_RED_LEFT:
-    .asciiz "sprites/entities/cap_red_left.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_left.bmp"
     .align 2
 F_CAP_RED_RIGHT:
-    .asciiz "sprites/entities/cap_red_right.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_right.bmp"
     .align 2
 F_CAP_RED_TOP:
-    .asciiz "sprites/entities/cap_red_top.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_top.bmp"
     .align 2
 F_CAP_RED_BOTTOM:
-    .asciiz "sprites/entities/cap_red_bottom.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_bottom.bmp"
     .align 2
 F_CAP_RED_CENTRE:
-    .asciiz "sprites/entities/cap_red_centre.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/cap_red_centre.bmp"
     .align 2
 CAP_BLUE:         # capsule pixel array; each pixel is 4 bytes \\
-    .space 1280   # 8 * 8 * 4 * 5 = 1280; we store the bitmap in order \\
-CAP_GREEN:        # [left, right, up, down, centre]
+    .space 1280   # 256 * 5 = 1280; we store the bitmap in order \\
+CAP_GREEN:       # [left, right, up, down, centre]
     .space 1280
 CAP_RED:
     .space 1280
 
 F_VIRUS_BLUE:
-    .asciiz "sprites/entities/virus_blue.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_blue.bmp"
     .align 2
 F_VIRUS_GREEN:
-    .asciiz "sprites/entities/virus_green.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_green.bmp"
     .align 2
 F_VIRUS_RED:
-    .asciiz "sprites/entities/virus_red.bmp"
+    .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/virus_red.bmp"
     .align 2
 VIRUS_BLUE:      # virus pixel array; each pixel is 4 bytes, and \\
     .space 256   # the dimensions of the sprite are TILE_SIZE x TILE_SIZE \\
-VIRUS_GREEN:     # so that our size is 8 * 8 * 4 = 256
+VIRUS_GREEN:    # so that our size is 8 * 8 * 4 = 256
     .space 256
 VIRUS_RED:
     .space 256
@@ -254,6 +254,26 @@ GARBAGE:
     .space 32
 BITMAP_OFFSET:
     .space 4
+    
+
+##############################################################################
+# Music and Sound Data
+##############################################################################
+NOTES:
+    .word 76, 76, 60, 76, 60, 72, 76, 60, 79, 60, 60, 60, 67
+DURATIONS:
+    .word 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200  # 13 entries
+ASYNC:
+    .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1  # 13 entries
+    .align 2  # word alignmet
+NOTE_COUNT:
+    .word 13  # actual count, updates
+CURRENT_NOTE:
+    .word 0  # current note index
+LAST_NOTE_TIME:
+    .word 0  # timestamp of last note that was played
+TIME_ACCUMULATOR:
+    .word 0  # tracks overflow time between notes
 
 ##############################################################################
 # Stack Macros
@@ -286,11 +306,20 @@ main:
     jal gen_preview_capsule
     jal draw_backdrop    # draw the backdrop only once
     jal draw             # draw the state of the game before start
+    
 
+    li $v0, 31
+    li $a0, 50
+    li $a1, 500
+    li $a2, 81
+    li $a3, 30
+    syscall
+    
+    jal init_music       # initialize the music system
+    
     li $v0, 30
     syscall              # determine current system time
     sw $a0, TIMESTAMP    # load system time as first timestamp
-
     j game_loop          # begin the main game loop
 
 ## Exit the program gracefully.
@@ -778,6 +807,8 @@ game_loop:
 
     beq $v0, 1, after_gravity     # if no collision occurred, return to \\
                                   # business as usual; otherwise...
+                                  
+    jal play_place_sound
 
     lw $a0, CAPSULE_P1            # commit the contents of the capsule \\
     lb $a1, CAPSULE_E1            # to the BOTTLE array
@@ -797,10 +828,12 @@ game_loop:
     jal gen_preview_capsule # create a new preview capsule if the game continues
     
   after_gravity:
+    jal update_music
     jal draw                # draw the frame after all events are handled
     
     li $v0, 32
     lw, $a0, SLEEP_TIME   # set the amount of time to sleep
+    srl $a0, $a0, 1 
     syscall               # sleep until the next frame     
 
     j game_loop           # return to the beginning of the loop
@@ -988,6 +1021,9 @@ rotate_capsule:
     sw $s1, CAPSULE_P2
     sb $s2, CAPSULE_E1              # as entity direction data has been changed, \\
     sb $s3, CAPSULE_E2              # update also the entity bytes for each half
+    
+    jal play_rotate_sound
+    
   rotate_capsule_exit:
     pop ($ra)                       # retrieve return address from stack
     jr $ra
@@ -1252,6 +1288,8 @@ check_matches:
      
      # We found a match! Set return value to 1
      li $v0, 1
+     
+     jal play_clear_sound
      
      # Check and update virus count if any are viruses
      lb $t7, 0($t4)
@@ -1801,3 +1839,213 @@ draw_region:
     j draw_region_loop_y
   draw_region_loop_y_end:
     jr $ra               # return to the caller
+
+
+##############################################################################
+# Sound Functions
+##############################################################################
+
+## Initialize the music system
+init_music:
+    push ($ra)
+    
+    # Initialize MIDI synthesizer
+    li $v0, 31
+    li $a0, 0  # Instrument number (0 = piano)
+    li $a1, 0  # Duration
+    li $a2, 0  # instrument
+    li $a3, 0  # volume
+    syscall
+    
+    # Initialize the current note counter
+    sw $zero, CURRENT_NOTE
+    
+    # Get initial timestamp
+    li $v0, 30
+    syscall
+    sw $a0, LAST_NOTE_TIME
+    
+    pop ($ra)
+    jr $ra
+    
+## Play a single note with the specified parameters:
+# - $a0: Note pitch (0-127)
+# - $a1: Duration in ms
+# - $a2: Instrument (0-127)
+# - $a3: Volume (0-127)
+# - $t9: Async flag (0 = synchronous, 1 = asynchronous)
+play_note:
+    push ($ra)
+    
+    # Check if this is a rest (pitch = 0)
+    beq $a0, $zero, play_done
+    
+    # Check if pitch is within valid range
+    blt $a0, 1, fix_pitch_low
+    bgt $a0, 127, fix_pitch_high
+    j pitch_ok
+    
+fix_pitch_low:
+    li $a0, 60  # Default to middle C if too low
+    j pitch_ok
+    
+fix_pitch_high:
+    li $a0, 127  # Cap at max MIDI note if too high
+    
+pitch_ok:
+    # Load parameters
+    move $t0, $a0  # Note pitch
+    move $t1, $a1  # Duration
+    move $t2, $a2  # Instrument
+    move $t3, $a3  # Volume
+    move $t4, $t9  # Async flag
+    
+    # Play the note
+    beq $t4, $zero, play_sync
+    
+    # Play asynchronously
+    li $v0, 31
+    move $a0, $t0
+    move $a1, $t1
+    move $a2, $t2  # instrument
+    move $a3, $t3  # volume
+    syscall
+    j play_done
+    
+play_sync:
+    # Play synchronously
+    li $v0, 33
+    move $a0, $t0
+    move $a1, $t1
+    move $a2, $t2  # instrument
+    move $a3, $t3  # volume
+    syscall
+    
+play_done:
+    pop ($ra)
+    jr $ra
+    
+## Play sound when a capsule is placed down (collision code that Stefan wrote)
+play_place_sound:
+    push ($ra)
+    li $v0, 31
+    li $a0, 60  # C4 note
+    li $a1, 150  # Duration
+    li $a2, 127  # this is vo
+    li $a3, 30  # change to volume 30
+    syscall
+    pop ($ra)
+    jr $ra
+
+## Play sound when capsule rotates on keyboard input
+play_rotate_sound:
+    push ($ra)
+    li $v0, 31
+    li $a0, 72  # C5 note
+    li $a1, 50  # Duration
+    li $a2, 100  # this is the instrument
+    li $a3, 30  # change to volume 30
+    syscall
+    pop ($ra)
+    jr $ra
+
+## Play sound on cleared
+play_clear_sound:
+    push ($ra)
+    li $v0, 31
+    li $a0, 84  # C6 note
+    li $a1, 300  # Duration
+    li $a2, 127  # Volume
+    li $a3, 30  # again, channel 30
+    syscall
+    pop ($ra)
+    jr $ra
+
+## Updates the background music, playing notes based on timing
+update_music:
+    push ($ra)
+    
+    # Get current time
+    li $v0, 30
+    syscall
+    move $t0, $a0  # Current time
+    
+    # Load last note time
+    lw $t1, LAST_NOTE_TIME
+    
+    # Calculate time elapsed since last check
+    sub $t2, $t0, $t1
+    
+    # Load accumulated time
+    lw $t3, TIME_ACCUMULATOR
+    add $t3, $t3, $t2  # Add elapsed time to accumulator
+    
+    # Update last check time
+    sw $t0, LAST_NOTE_TIME
+    
+check_play_note:
+    # Load current note index and total note count
+    lw $t4, CURRENT_NOTE
+    lw $t5, NOTE_COUNT
+    
+    # Check if we've reached the end of the song
+    bge $t4, $t5, reset_music
+    
+    # Load current note duration
+    la $t6, DURATIONS
+    sll $t7, $t4, 2  # Multiply by 4 (word size)
+    add $t6, $t6, $t7
+    lw $t8, 0($t6)  # Duration of current note
+    
+    # Check if enough time has passed to play next note
+    blt $t3, $t8, update_music_done
+    
+    # Time to play the next note - reduce accumulator by note duration
+    sub $t3, $t3, $t8
+    
+    # Get note pitch
+    la $t6, NOTES
+    sll $t7, $t4, 2  # Multiply by 4 (word size)
+    add $t6, $t6, $t7
+    lw $a0, 0($t6)  # Note pitch
+    
+    # Set up parameters for playing the note
+    move $a1, $t8   # Duration
+    li $a2, 1       # Instrument (acoustic grand)
+    li $a3, 90      # Volume (slightly reduced)
+    li $t9, 1       # Always play asynchronously
+    
+    # Save important registers before function call
+    push ($t0)
+    push ($t1)
+    push ($t3)
+    push ($t4)
+    push ($t5)
+    
+    jal play_note
+    
+    # Restore registers after function call
+    pop ($t5)
+    pop ($t4)
+    pop ($t3)
+    pop ($t1)
+    pop ($t0)
+    
+    # Increment to next note
+    addi $t4, $t4, 1
+    sw $t4, CURRENT_NOTE
+    
+    # Check if we should try to play another note immediately
+    j check_play_note
+    
+reset_music:
+    # Reset to beginning of song
+    sw $zero, CURRENT_NOTE
+    li $t3, 0
+    
+update_music_done:
+    # Save accumulated time
+    sw $t3, TIME_ACCUMULATOR
+    
+    pop ($ra)
+    jr $ra
