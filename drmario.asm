@@ -247,6 +247,11 @@ NEXT_E1:            # entity bytes for the first and second halves of the \\
 NEXT_E2:            # current player capsule lands
     .space 4
 
+TOUCHDOWN_LIST:     # list used in storing the entities that have just \\
+    .space 256      # landed on some surface (are no longer falling)
+CLEAR_LIST:         # list used in storing the entities that must be \\
+    .space 256      # removed from the playing grid
+
 DELTA_CAP:          # time interval between gravity applications
     .space 4
 DELTA:              # time since last gravity application
@@ -343,18 +348,9 @@ main:
     jal gen_preview_capsule
     jal load_next_capsule
     jal gen_preview_capsule
+    jal init_music       # initialize the music system
     jal draw_backdrop    # draw the backdrop only once
     jal draw             # draw the state of the game before start
-    
-
-    li $v0, 31
-    li $a0, 50
-    li $a1, 500
-    li $a2, 81
-    li $a3, 30
-    syscall
-    
-    jal init_music       # initialize the music system
     
     li $v0, 30
     syscall              # determine current system time
@@ -365,6 +361,37 @@ main:
 exit:
     li $v0, 10   # send a system call to exit the program
     syscall
+
+##############################################################################
+# Init Functions
+##############################################################################
+
+## Copy a specified number of bytes from a source starting memory 
+## address to a target starting memory address.
+# This function does not touch the $s registers.
+# Takes in the following parameters:
+# - $a0 : the address of the source in memory
+# - $a1 : the address of the target in memory 
+# - $a2 : the number of bytes to copy from source to targed
+memcpy:
+    move $t4, $a0
+    move $t5, $a1
+    
+    li $t0, 0                    # set the loop variable
+    move $t1, $a2                # TILE_SIZE^2 * BOTTLE_HEIGHT * BOTTLE_WIDTH * 4
+  memcpy_loop:
+    beq $t0, $t1, memcpy_exit
+    
+    lb $t3, 0($t4)
+    sb $t3, 0($t5)
+  
+    addi $t4, $t4, 1
+    addi $t5, $t5, 1
+    addi $t0, $t0, 1
+  
+    j memcpy_loop
+  memcpy_exit:
+    jr $ra
 
 ## Initialize all values within the BOTTLE array to zero, so that there
 ## are no non-zero entries that are not deliberately entered later on.
@@ -821,6 +848,10 @@ load_next_capsule:
     pop ($ra)              # retrieve the return address stored on \\
     jr $ra                 # the stack, and return to the caller
 
+##############################################################################
+# Main Game Loop Functions
+##############################################################################
+
 ## The main game loop. This runs indefinitely once the game state
 ## is initialized by the main function.
 # This function takes no arguments.
@@ -977,51 +1008,6 @@ keyboard_input:
     pop ($ra)                       # retrieve return address from the stack
     jr $ra                          # return to caller
 
-## Validate the position of a given entity. This function checks that
-## the entity does not collide with any entity currently in the
-## BOTTLE array, and verifies that it does not fall outside the bounds
-## of the bottle grid.
-# This function operates only on $t registers.
-# Takes in the following parameters:
-# - $a0 : the position, in tile coordinates, to check for a collision;
-#          this should be in format (x, y) = ($a0[31:16], $a0[15:0]) 
-# and returns:
-# - $v0 : whether a collision occurs; 1 if there is no collision;
-#         0 if there is a collision
-validate: 
-    # check that the entity is in bounds
-    lw $t0, BOTTLE_WIDTH        # load in the bottle grid dimensions
-    lw $t1, BOTTLE_HEIGHT
-    li $t2, -1                  # used for bounding coordinates below
-    andi $t3, $a0, 0xffff0000   # extract x and y information from \\
-    srl $t3, $t3, 16            # the provided argument, in that order
-    andi $t4, $a0, 0x0000ffff
-    
-    slt $t5, $t2, $t3           # check that x > -1
-    slt $t7, $t3, $t0           # check that x < BOTTLE_WIDTH
-    and $t5, $t5, $t7           # 1 if both conditions hold
-
-    slt $t6, $t2, $t4           # check that y > -1 (unnecessary)
-    slt $t7, $t4, $t1           # check that y < BOTTLE_HEIGHT
-    and $t6, $t6, $t7           # 1 if both conditions hold
-
-    and $v0, $t5, $t6           # 1 if all conditions hold; otherwise \\
-    beq $v0, 0, validate_exit   # return with 0
-    
-    # check that the position is not occupied
-    mult $t0, $t4               # compute the index of this entity in \\
-    mflo $t8                    # the BOTTLE array; as each entry is \\
-    add $t8, $t8, $t3           # 1 byte, this is y * WIDTH + x
-    la $t9, BOTTLE
-    add $t9, $t9, $t8
-    lb $t9, 0($t9)              # this is the entry at position (x, y)
-
-    beq $t9, 0, validate_exit   # $v0 is currently 1, so return 1 \\
-    li $v0, 0                   # if entry is nonzero; else return 0
-    
-  validate_exit:
-    jr $ra
-
 ## Rotate the player capsule if possible. If a collision
 ## occurs during the rotation, return to original position.
 # Takes in no parameter.
@@ -1071,6 +1057,131 @@ rotate_capsule:
     
   rotate_capsule_exit:
     pop ($ra)                       # retrieve return address from stack
+    jr $ra
+
+
+## Apply the pause menu view to the display. This is maintained
+## until the 'p' key is pressed to unpause.
+# This function takes in no arguments.
+pause_menu:
+    push ($ra)
+    
+    lw $a0, ADDR_DSPL         # copy the current display contents to \\
+    la $a1, SCREEN_BACKUP     # a safe space prior to transformation
+    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
+    jal memcpy
+
+    la $a0, SCREEN_BACKUP     # copy the saved display pixels to a space \\
+    la $a1, SCREEN_DESAT      # where they can then be transformed
+    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
+    jal memcpy
+
+    li $s0, 0                 # set a loop variable
+    li $s1, 57344             # DISPLAY_WIDTH * DISPLAY_HEIGHT
+    la $s2, SCREEN_DESAT      # load the memory to be transformed
+  pause_desaturate_loop:
+    bge $s0, $s1, pause_desaturate_loop_exit
+
+    move $a0, $s2
+    jal desaturate_px         # desaturate the pixel at the given location
+    
+    addi $s0, $s0, 1
+    addi $s2, $s2, 4
+    j pause_desaturate_loop
+  pause_desaturate_loop_exit: # once we are done, every pixel is desaturated
+
+    # attach the paused indicator on the desaturated screen
+    la $a0, PAUSED_IMG        # source pixel array
+    li $a1, 16                # height 2 tiles x 8 pixels per tile
+    li $a2, 40                # width 5 tiles x 8 pixels per tile
+    lw $a3, PAUSE_OFFSET      # top left corner to draw from
+    lw $t0, DISPLAY_WIDTH     # width of target
+    push ($t0)
+    la $t0, SCREEN_DESAT      # target pixel array
+    push ($t0)
+    jal draw_region
+    
+    la $a0, SCREEN_DESAT      # move the transformed pixel screen to the \\
+    lw $a1, ADDR_DSPL         # display's location in memory
+    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
+    jal memcpy
+
+  pause_loop:
+    li $v0, 32                # sleep for a frame
+    lw $a0, SLEEP_TIME
+    syscall
+
+    lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
+    lw $t1, 0($t0)                  # load first word from keyboard
+    lw $t2, 4($t0)                  # load the key pressed
+    seq $t4, $t1, 1                 # check that a key is pressed
+    seq $t5, $t2, 0x70              # check that p is pressed
+    and $t5, $t4, $t5               # 1 if both conditions hold, in \\
+    beq $t5, 1, unpause          # which case we unpause
+
+    j pause_loop
+  unpause:
+    li $v0, 30
+    syscall                   # load system time into ($a1, $a0)
+    sw $a0, TIMESTAMP         # determine current timestamp; this is to \\
+                              # avoid drastic increments on DELTA over the \\
+                              # time the game is paused
+
+    la $a0, SCREEN_BACKUP     # restore the original display, as was before \\
+    lw $a1, ADDR_DSPL         # modifications by the paused menu
+    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
+    jal memcpy
+
+    pop ($ra)
+    jr $ra
+
+##############################################################################
+# Physics Functions
+##############################################################################
+
+## Validate the position of a given entity. This function checks that
+## the entity does not collide with any entity currently in the
+## BOTTLE array, and verifies that it does not fall outside the bounds
+## of the bottle grid.
+# This function operates only on $t registers.
+# Takes in the following parameters:
+# - $a0 : the position, in tile coordinates, to check for a collision;
+#          this should be in format (x, y) = ($a0[31:16], $a0[15:0]) 
+# and returns:
+# - $v0 : whether a collision occurs; 1 if there is no collision;
+#         0 if there is a collision
+validate: 
+    # check that the entity is in bounds
+    lw $t0, BOTTLE_WIDTH        # load in the bottle grid dimensions
+    lw $t1, BOTTLE_HEIGHT
+    li $t2, -1                  # used for bounding coordinates below
+    andi $t3, $a0, 0xffff0000   # extract x and y information from \\
+    srl $t3, $t3, 16            # the provided argument, in that order
+    andi $t4, $a0, 0x0000ffff
+    
+    slt $t5, $t2, $t3           # check that x > -1
+    slt $t7, $t3, $t0           # check that x < BOTTLE_WIDTH
+    and $t5, $t5, $t7           # 1 if both conditions hold
+
+    slt $t6, $t2, $t4           # check that y > -1 (unnecessary)
+    slt $t7, $t4, $t1           # check that y < BOTTLE_HEIGHT
+    and $t6, $t6, $t7           # 1 if both conditions hold
+
+    and $v0, $t5, $t6           # 1 if all conditions hold; otherwise \\
+    beq $v0, 0, validate_exit   # return with 0
+    
+    # check that the position is not occupied
+    mult $t0, $t4               # compute the index of this entity in \\
+    mflo $t8                    # the BOTTLE array; as each entry is \\
+    add $t8, $t8, $t3           # 1 byte, this is y * WIDTH + x
+    la $t9, BOTTLE
+    add $t9, $t9, $t8
+    lb $t9, 0($t9)              # this is the entry at position (x, y)
+
+    beq $t9, 0, validate_exit   # $v0 is currently 1, so return 1 \\
+    li $v0, 0                   # if entry is nonzero; else return 0
+    
+  validate_exit:
     jr $ra
 
 ## Apply an input displacement to the player capsule, and return
@@ -1476,107 +1587,9 @@ apply_gravity:
      pop ($ra)               # restore return address
      jr $ra                  # Return to caller
 
-## Copy a specified number of bytes from a source starting memory 
-## address to a target starting memory address.
-# This function does not touch the $s registers.
-# Takes in the following parameters:
-# - $a0 : the address of the source in memory
-# - $a1 : the address of the target in memory 
-# - $a2 : the number of bytes to copy from source to targed
-memcpy:
-    move $t4, $a0
-    move $t5, $a1
-    
-    li $t0, 0                    # set the loop variable
-    move $t1, $a2                # TILE_SIZE^2 * BOTTLE_HEIGHT * BOTTLE_WIDTH * 4
-  memcpy_loop:
-    beq $t0, $t1, memcpy_exit
-    
-    lb $t3, 0($t4)
-    sb $t3, 0($t5)
-  
-    addi $t4, $t4, 1
-    addi $t5, $t5, 1
-    addi $t0, $t0, 1
-  
-    j memcpy_loop
-  memcpy_exit:
-    jr $ra
-
-## Apply the pause menu view to the display. This is maintained
-## until the 'p' key is pressed to unpause.
-# This function takes in no arguments.
-pause_menu:
-    push ($ra)
-    
-    lw $a0, ADDR_DSPL         # copy the current display contents to \\
-    la $a1, SCREEN_BACKUP     # a safe space prior to transformation
-    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
-    jal memcpy
-
-    la $a0, SCREEN_BACKUP     # copy the saved display pixels to a space \\
-    la $a1, SCREEN_DESAT      # where they can then be transformed
-    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
-    jal memcpy
-
-    li $s0, 0                 # set a loop variable
-    li $s1, 57344             # DISPLAY_WIDTH * DISPLAY_HEIGHT
-    la $s2, SCREEN_DESAT      # load the memory to be transformed
-  pause_desaturate_loop:
-    bge $s0, $s1, pause_desaturate_loop_exit
-
-    move $a0, $s2
-    jal desaturate_px         # desaturate the pixel at the given location
-    
-    addi $s0, $s0, 1
-    addi $s2, $s2, 4
-    j pause_desaturate_loop
-  pause_desaturate_loop_exit: # once we are done, every pixel is desaturated
-
-    # attach the paused indicator on the desaturated screen
-    la $a0, PAUSED_IMG        # source pixel array
-    li $a1, 16                # height 2 tiles x 8 pixels per tile
-    li $a2, 40                # width 5 tiles x 8 pixels per tile
-    lw $a3, PAUSE_OFFSET      # top left corner to draw from
-    lw $t0, DISPLAY_WIDTH     # width of target
-    push ($t0)
-    la $t0, SCREEN_DESAT      # target pixel array
-    push ($t0)
-    jal draw_region
-    
-    la $a0, SCREEN_DESAT      # move the transformed pixel screen to the \\
-    lw $a1, ADDR_DSPL         # display's location in memory
-    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
-    jal memcpy
-
-  pause_loop:
-    li $v0, 32                # sleep for a frame
-    lw $a0, SLEEP_TIME
-    syscall
-
-    lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
-    lw $t1, 0($t0)                  # load first word from keyboard
-    lw $t2, 4($t0)                  # load the key pressed
-    seq $t4, $t1, 1                 # check that a key is pressed
-    seq $t5, $t2, 0x70              # check that p is pressed
-    and $t5, $t4, $t5               # 1 if both conditions hold, in \\
-    beq $t5, 1, unpause          # which case we unpause
-
-    j pause_loop
-  unpause:
-    li $v0, 30
-    syscall                   # load system time into ($a1, $a0)
-    sw $a0, TIMESTAMP         # determine current timestamp; this is to \\
-                              # avoid drastic increments on DELTA over the \\
-                              # time the game is paused
-
-    la $a0, SCREEN_BACKUP     # restore the original display, as was before \\
-    lw $a1, ADDR_DSPL         # modifications by the paused menu
-    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
-    jal memcpy
-
-    pop ($ra)
-    jr $ra
+##############################################################################
+# Display Functions
+##############################################################################
 
 ## Given the input pixel, returns a desaturated version of the pixel.
 ## This does not return anything, but mutates the pixel at the given address.
@@ -1998,6 +2011,72 @@ draw_region:
   draw_region_loop_y_end:
     jr $ra               # return to the caller
 
+##############################################################################
+# List ADT Functions
+##############################################################################
+
+# Lists are implemented as arrays where the first word stores size. Thus, it 
+# takes form [ size | element 1 | element 2 | ... ]
+
+## Fetch the number of elements in a list.
+## This function only modifies $t registers.
+# Takes in the following parameters:
+# - $a0 : the starting address of the target list
+# Returns:
+# - $v0 : the number of elements in the target list
+list_size:
+    lw $v0, 0($a0)        # size is stored as the first element
+    jr $ra
+
+## Fetch the element at the given index in a list. This
+## function assumes the given index is valid, and will read 
+## at the given index EVEN IF IT IS INVALID MEMORY.
+## This function only modifies $t registers.
+# Takes in the following parameters:
+# - $a0 : the starting address of the target list L
+# - $a1 : the index of the element to access i; despite
+#         the 0th element representing size in memory,
+#         this parameter should be 0-indexed
+# Returns:
+# - $v0 : the value at index $a1, namely L[i]
+list_at:
+    li $t0, 4             # shift starting address by 4 bytes, \\
+    add $a0, $a0, $t0     # so that we jump over the size word
+    
+    mult $a1, $t0         # compute 4 * i as the number of bytes \\
+    mflo $t0              # to shift from the start of the array \\
+    add $a0, $a0, $t0     # and read the target value from
+    lw $v0, 0($a0)
+    jr $ra
+
+## Append an element to the end of a list.
+## This function only modifies $t registers.
+# Takes in the following parameters:
+# - $a0 : the starting address of the target list
+# - $a1 : the element to append to the list
+list_insert:
+    lw $t0, 0($a0)        # load the old size 
+    addi $t1, $t0, 1
+    sw $t1, 0($a0)        # store size increased by 1
+
+    li $t2, 4             # shift starting address by 4 bytes, \\
+    add $a0, $a0, $t2     # so that we jump over the size word
+
+    mult $t0, $t2         # compute 4 * size as the number of bytes \\
+    mflo $t2              # to shift from the start of the array; \\
+    add $a0, $a0, $t2     # then, store the new element at that \\
+    sw $a1, 0($a0)        # position, so L[size] = element
+
+    jr $ra
+    
+
+## Empty out the list. This effectively sets size to 0.
+## This function only modifies $t registers.
+# Takes in the following parameters:
+# - $a0 : the starting address of the target list
+list_clear:
+    sw $zero, 0($a0)     # reset size to 0
+    jr $ra
 
 ##############################################################################
 # MIDI File Reading Functions
