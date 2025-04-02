@@ -2458,7 +2458,7 @@ find_track:
     li $t1, 'k'
     bne $t0, $t1, next_track_byte
     
-    # Found the track - get track length
+    # Found the track, get track length
     add $t0, $s0, $s4
     addi $t0, $t0, 4
     lbu $t1, 0($t0)
@@ -2487,8 +2487,8 @@ next_track_byte:
     j find_track
     
 parse_track_found:
-    # Now parse the first track for note events
-    # Skip delta-time VLQ in front of each event
+    # parse the first track for note events
+    # we skip delta-time VLQ in front of each event
     # s4 = current position in track
     # s5 = start of track data
     # s6 = end position of track
@@ -2587,19 +2587,19 @@ check_note_event:
     add $t0, $t0, $t1
     sw $t5, 0($t0)        # Store note pitch
     
-    # Store duration (fixed for now)
+    # Store duration (fixed for now, can change later?)
     la $t0, DURATIONS
     add $t0, $t0, $t1
     li $t2, 200           # Default duration (can be improved)
     sw $t2, 0($t0)
     
-    # Store async flag
+    # Store the async flag
     la $t0, ASYNC
     add $t0, $t0, $s1     # Byte aligned
     li $t2, 1             # Always async
     sb $t2, 0($t0)
     
-    # Increment note counter
+    # Increment the note counter
     addi $s1, $s1, 1
     j parse_track_loop
     
@@ -2608,11 +2608,11 @@ not_note_on:
     li $t4, 0x80
     beq $t3, $t4, note_off
     
-    # Other events will have 1 or 2 data bytes depending on status
+    # Other events will have 1 or 2 data bytes depending on the status
     andi $t3, $t8, 0xF0
     li $t4, 0xC0      # Program change and Channel pressure have 1 byte
     beq $t3, $t4, one_data_byte
-    li $t4, 0xD0      # Channel pressure
+    li $t4, 0xD0
     beq $t3, $t4, one_data_byte
     
     # Default to 2 data bytes
@@ -2632,7 +2632,7 @@ parse_done:
     # Store the number of notes found
     sw $s1, MIDI_NOTE_COUNT
     
-    # If we didn't find any valid notes, fall back to defaults
+    # If we didn't find any valid notes, fall back to our default theme
     bgtz $s1, parse_success
     
 parse_error:
@@ -2641,12 +2641,12 @@ parse_error:
     la $a0, MSG_MIDI_ERROR
     syscall
     
-    # Fall back to default music
+    # fall back to our default music (fever theme)
     jal load_default_music
     j parse_exit
     
 parse_success:
-    # Print success message (optional)
+    # print a success message
     li $v0, 4
     la $a0, MSG_MIDI_SUCCESS
     syscall
