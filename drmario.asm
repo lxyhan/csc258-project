@@ -833,7 +833,7 @@ load_next_capsule:
     jal validate
     move $s1, $v0
     and $s0, $s0, $s1      # can only spawn if neither validation fails
-    beq $s0, 0, load_capsule_exit
+    bne $s0, 2, load_capsule_exit
 
     li $s7, 1              # if we reach this point, the position is valid, \\
                            # and capsule generation has succeeded
@@ -1046,7 +1046,7 @@ rotate_capsule:
 
     and $t4, $s6, $s7               # 1 if both positions are safe
     li $v0, 0                       # set the default return value to 0
-    beq $t4, 0, rotate_capsule_exit # exit if new position is invalid
+    bne $t4, 2, rotate_capsule_exit # exit if new position is invalid
 
     sw $s0, CAPSULE_P1              # otherwise, commit the changes
     sw $s1, CAPSULE_P2
@@ -1148,8 +1148,8 @@ pause_menu:
 # - $a0 : the position, in tile coordinates, to check for a collision;
 #          this should be in format (x, y) = ($a0[31:16], $a0[15:0]) 
 # and returns:
-# - $v0 : whether a collision occurs; 1 if there is no collision;
-#         0 if there is a collision
+# - $v0 : whether a collision occurs; 2 if there is no collision;
+#         0 if the position is out of bounds; 1 if there is a collision
 validate: 
     # check that the entity is in bounds
     lw $t0, BOTTLE_WIDTH        # load in the bottle grid dimensions
@@ -1163,12 +1163,12 @@ validate:
     slt $t7, $t3, $t0           # check that x < BOTTLE_WIDTH
     and $t5, $t5, $t7           # 1 if both conditions hold
 
-    slt $t6, $t2, $t4           # check that y > -1 (unnecessary)
+    slt $t6, $t2, $t4           # check that y > -1
     slt $t7, $t4, $t1           # check that y < BOTTLE_HEIGHT
     and $t6, $t6, $t7           # 1 if both conditions hold
 
     and $v0, $t5, $t6           # 1 if all conditions hold; otherwise \\
-    beq $v0, 0, validate_exit   # return with 0
+    beq $v0, 0, validate_exit_with_0
     
     # check that the position is not occupied
     mult $t0, $t4               # compute the index of this entity in \\
@@ -1178,11 +1178,21 @@ validate:
     add $t9, $t9, $t8
     lb $t9, 0($t9)              # this is the entry at position (x, y)
 
-    beq $t9, 0, validate_exit   # $v0 is currently 1, so return 1 \\
-    li $v0, 0                   # if entry is nonzero; else return 0
+    bne $t9, 0, validate_exit_with_1  # if entry is occupied (nonzero), return 1
+    j validate_exit_with_2            # if entry is unoccupied (zero), return 2
     
-  validate_exit:
+  validate_exit_with_0:
+    li $v0, 0
     jr $ra
+
+  validate_exit_with_1:
+    li $v0, 1
+    jr $ra
+
+  validate_exit_with_2:
+    li $v0, 2
+    jr $ra
+    
 
 ## Apply an input displacement to the player capsule, and return
 ## whether the change in position was successful.
@@ -1208,7 +1218,7 @@ displace:
 
     and $t4, $s2, $s3               # 1 if both positions are safe
     li $v0, 0                       # set the default return value to 0
-    beq $t4, 0, displace_exit       # exit if new position is invalid
+    bne $t4, 2, displace_exit       # exit if new position is invalid
 
     sw $s0, CAPSULE_P1              # otherwise, commit the changes \\
     sw $s1, CAPSULE_P2              # and return 1
@@ -1239,7 +1249,7 @@ displace_solo:
     move $s2, $v0                # the changes to the provided location \\
 
     li $v0, 0                         # set default return value to 0
-    beq $s2, 0, displace_solo_exit    # exit if the new position is invalid
+    bne $s2, 2, displace_solo_exit    # exit if the new position is invalid
     
     sw $s1, 0($s0)               # otherwise, commit the changes and \\
     li $v0, 1                    # return 1
@@ -1262,9 +1272,19 @@ handle_touchdown:
     lw $a1, CAPSULE_P2
     jal list_insert
 
+    li $t0, -1                 # once we have added the capsules to the touchdown \\
+    sw $t0, CAPSULE_P1         # list, we must invalidate them so that they are not \\
+                               # drawn as entities separate from the grid
+
   handle_touchdown_loop:
     jal check_matches          # search for any matches made by entities in \\
                                # the TOUCHDOWN_LIST
+
+    # if no matches were made, immediately escape
+    la $a0, CLEAR_LIST
+    jal list_size
+    beq $v0, 0, handle_touchdown_exit
+    
     jal clear_matches          # clear any matches found in check_matches
     jal apply_gravity          # apply gravity to anything that is suspended
     push ($v0)                 # save whether apply_gravity did anything
@@ -1274,10 +1294,11 @@ handle_touchdown:
     lw $a0, DELTA_CAP_DEFAULT
     syscall
 
-    pop ($t0)                  # if apply_gravity did something, keep going
-    beq $t0, 1, handle_touchdown_loop # this way we repeat until there is \\
+    pop ($v0)                  # if apply_gravity did something, keep going
+    beq $v0, 1, handle_touchdown_loop # this way we repeat until there is \\
                                       # nothing left to update
-    
+
+  handle_touchdown_exit:
     pop ($ra)                  # restore return address
     jr $ra                     # return to caller
  
@@ -1288,7 +1309,8 @@ check_matches:
     
     move $s0, $zero           # introduce loop variable $s0
     la $s7, TOUCHDOWN_LIST    # iterate over every element of the \\
-    jal list_size             # touchdown list
+    move $a0, $s7             # touchdown list
+    jal list_size
     move $s1, $v0
   match_tdwn_loop:
     beq $s0, $s1, match_tdwn_loop_end  # terminate when every element has been read
@@ -1297,26 +1319,97 @@ check_matches:
     move $a0, $s7 
     move $a1, $s0
     jal list_at               # fetch the element from the touchdown list
+    move $s5, $v0
 
-    move $a0, $v0
+    move $a0, $s5
     jal load_byte_from_bottle # get the byte corresponding to the element
+    andi $s2, $v0, 0b1110     # get the colour for the byte
+
+    # walk in horizontal direction to check for horizontal clear
+    move $a0, $s5
+    li $a1, -1                # walk left first
+    li $a2, 0
+    move $a3, $s2
+    jal coloured_walk
+    move $s3, $v0
+
+    move $a0, $s5
+    li $a1, 1                 # walk right next
+    li $a2, 0
+    move $a3, $s2
+    jal coloured_walk
+    move $s4, $v0
+
+    add $t0, $s3, $s4         # compute $t0 = walk_left + walk_right + 1 \\
+    addi $t0, $t0, 1          # where we add 1 to include the original position
+    blt $t0, 4, skip_horiz_clear  # only run a horizontal clear if 4+ in a row
+
+    la $a0, CLEAR_LIST        # we reach this if we're clearing; in this case, \\
+    move $a1, $s5             # certainly the touchdown entity must also be cleared
+    jal list_insert
+
+    # walk in horizontal direction to commit horizontal clear
+    move $a0, $s5
+    li $a1, -1                # walk left first
+    li $a2, 0
+    move $a3, $s3
+    jal walk_and_clear
+    move $s3, $v0
+
+    move $a0, $s5
+    li $a1, 1                 # walk right next
+    li $a2, 0
+    move $a3, $s4
+    jal walk_and_clear
+    move $s4, $v0
     
+    skip_horiz_clear:
+    # walk in vertical direction to check for vertical clear
+    move $a0, $s5
+    li $a1, 0                 # walk down first
+    li $a2, 1
+    move $a3, $s2
+    jal coloured_walk
+    move $s3, $v0
 
-    move $s2, $zero           # let $s2 be the left walk length
-    walk_left:
+    move $a0, $s5
+    li $a1, 0                 # walk up next
+    li $a2, -1
+    move $a3, $s2
+    jal coloured_walk
+    move $s4, $v0
 
-    walk_left_end:
+    add $t0, $s3, $s4         # compute $t0 = walk_down + walk_up + 1 \\
+    addi $t0, $t0, 1          # where we add 1 to include the original position
+    blt $t0, 4, skip_vert_clear  # only run a vertical clear if 4+ in a column
 
-    move $s3, $zero           # let $s3 be the right walk length
-    walk_right:
+    la $a0, CLEAR_LIST        # we reach this if we're clearing; in this case, \\
+    move $a1, $s5             # certainly the touchdown entity must also be cleared
+    jal list_insert
 
-    walk_right_end:
+    # walk in vertical direction to commit vertical clear
+    move $a0, $s5
+    li $a1, 0                 # walk down first
+    li $a2, 1
+    move $a3, $s3
+    jal walk_and_clear
+    move $s3, $v0
 
+    move $a0, $s5
+    li $a1, 0                 # walk up next
+    li $a2, -1
+    move $a3, $s4
+    jal walk_and_clear
+    move $s4, $v0
+    
+    skip_vert_clear:
     addi $s0, $s0, 1          # increment the loop variable
     j match_tdwn_loop
   match_tdwn_loop_end:
-    la $s0, TOUCHDOWN_LIST    # clear the touchdown list when done
+    move $a0, $s7             # clear the touchdown list when done
     jal list_clear
+    la $s0, CLEAR_LIST  # TEMP
+    addi $t0, $t0, 1    # TEMP
     
     pop ($ra)
     jr $ra
@@ -1325,8 +1418,91 @@ check_matches:
 ## animate the clear, and will update the SCORE to add the points assigned
 ## to each entity that is cleared.
 clear_matches:
-    # NOTE TO SELF: if the thing being cleared is already 0, DO NOTHING!
-    #               otherwise we'll double count clears towards the score!
+    push ($ra)               # save return address
+
+    la $t0, TOUCHDOWN_LIST
+    
+    move $s0, $zero          # introduce loop variable $s0
+    la $s7, CLEAR_LIST       # iterate over every element of the \\
+    move $a0, $s7            # clear list
+    jal list_size
+    move $s1, $v0
+  clear_match_loop:
+    beq $s0, $s1, clear_match_loop_end
+
+    move $a0, $s7
+    move $a1, $s0
+    jal list_at              # fetch the element from the clear list
+    move $s5, $v0
+
+    move $a0, $s5
+    jal load_byte_from_bottle # first check the current byte value
+    move $s2, $v0
+    andi $s2, $s2, 0xff       # remove any garbage not in last byte
+
+    beq $s2, 0, clear_alr_zero    # if the byte is not already in \\
+    lw $s3, SCORE                 # zeroed out, add points points \\
+    andi $s4, $s2, 0b1            # corresponding to the entity \\
+    beq $s4, 0, add_virus_score   # deleted to the player's score, \\
+    beq $s4, 1, add_capsule_score # and update siblings if any
+
+    add_virus_score:
+    lw $s4, VIRUS_CLEAR_PTS
+    add $s3, $s3, $s4
+    sw $s3, SCORE
+    j check_for_sibling
+
+    add_capsule_score:
+    lw $s4, CAPSULE_CLEAR_PTS
+    add $s3, $s3, $s4
+    sw $s3, SCORE
+    j check_for_sibling
+
+    # check if the capsule has a sibling (is directional)
+    # if a sibling exists, the 7th bit of the entity byte is 0
+    check_for_sibling:
+    andi $s4, $s2, 0b1
+    beq $s4, 0, clear_alr_zero   # do nothing if this is a virus
+    andi $s4, $s2, 0b1000000
+    beq $s4, 0b1000000, clear_alr_zero   # do nothing if there is no sibling
+
+    # if we reach this point, we should notify the sibling that
+    # they are being abandoned
+    move $a0, $s5
+    jal find_sibling
+    move $s4, $v0
+    
+    move $a0, $s4
+    jal load_byte_from_bottle # load the sibling's entity byte
+    move $s2, $v0
+    
+    andi $s2, $s2, 0x0f       # clear directional information
+    ori $s2, $s2, 0x40        # update directional info to be abandoned
+
+    move $a0, $s4             # set sibling position for modification
+    move $a1, $s2             # set updated entity byte
+    jal set_byte_to_bottle
+
+    clear_alr_zero:
+    move $a0, $s5             # set corresponding byte to 0 when done
+    li $a1, 0
+    jal set_byte_to_bottle
+      
+    addi $s0, $s0, 1
+    j clear_match_loop
+  clear_match_loop_end:
+
+    lw $t0, CAPSULE_P1
+    # TODO: PLAY A SOUND
+    jal draw                 # draw the new animated clear state
+    li $v0, 32               # sleep briefly to show the frame
+    lw $a0, DELTA_CAP_DEFAULT
+    syscall
+    
+    move $a0, $s7
+    jal list_clear           # empty out the clear list when done
+    pop ($ra)
+    jr $ra
 
 ## Bring down all suspended (unsupported) entities within the BOTTLE by
 ## one tile. If this action causes the entity to become supported, the
@@ -1406,14 +1582,133 @@ apply_gravity:
 ## it, or it has a partnered entity (a capsule half) that is supported by
 ## something other than the entity itself.
 ## This function modifies only $t registers.
-# This function recieves the following parameter:
+# This function receives the following parameter:
 # - $a0 : the position of the entity to check
 # Returns:
 # - $v0 : 1 if the entity is supported, 0 otherwise
 is_supported:
 
+## Walk in the given direction from the starting position until we reach
+## the boundary of the playing grid, reach an empty spot, or reach an 
+## entity with a different colour.
+# This function modifies only $t registers.
+# Receives the following parameters:
+# - $a0 : the starting position, in format xxxx yyyy in hex
+# - $a1 : the x-direction (horizontal) of the walk ( in {-1, 0, 1} )
+# - $a2 : the y-direction (vertical) of the walk ( in {-1, 0, 1} )
+# - $a3 : the colour to walk on, in format 0bccc0, where last bit is ignored
+# Returns:
+# - $v0 : the length of the walk
+coloured_walk:
+    push ($ra)          # store return address on stack
+    li $t0, 0           # set initial walk length $t0 = 0
+    j walk_first_iter
+    
+  coloured_walk_loop:   # increment the walk length on all but \\
+    addi $t0, $t0, 1    # the first iteration
+  
+  walk_first_iter:
+    # add direction to position; direction should be in form XXXX YYYY; store in $a0
+    andi $t1, $a0, 0xffff0000
+    srl $t1, $t1, 16        # extract x-pos
+    andi $t2, $a0, 0xffff   # extract y-pos
 
-## Given a position in the BOTTLE in format XXXX YYYY in hex, return the
+    add $t1, $t1, $a1       # update the coordinates of the position on the walk
+    add $t2, $t2, $a2
+
+    move $a0, $t1
+    sll $a0, $a0, 16
+    add $a0, $a0, $t2      # convert back to xxxx yyyy in hex form, for next func calls
+
+    push ($a1)             # save any persisting values before making function calls
+    push ($a2)
+    push ($a3)
+    push ($t0)
+    push ($a0)
+    
+    move $a0, $a0         # check that there is an entity at the position
+    jal validate          # returns 1 if an entity is found at position
+
+    pop ($a0)
+    pop ($t0)
+    pop ($a3)
+    pop ($a2)
+    pop ($a1)
+    
+    bne $v0, 1, coloured_walk_loop_exit  # if no entity, walk is over
+
+    push ($a1)             # save any persisting values before making function calls
+    push ($a2)
+    push ($a3)
+    push ($t0)
+    push ($a0)
+
+    move $a0, $a0
+    jal load_byte_from_bottle # get the byte corresponding to the position $t1
+    andi $v0, $v0, 0b1110     # get the colour for the byte
+    
+    pop ($a0)
+    pop ($t0)
+    pop ($a3)
+    pop ($a2)
+    pop ($a1)
+
+    bne $v0, $a3, coloured_walk_loop_exit  # if not same colour as $a3, walk is over
+    j coloured_walk_loop
+  coloured_walk_loop_exit:
+    move $v0, $t0
+    pop ($ra)
+    jr $ra
+
+## Walk in the given direction from the starting position for the given
+## number of steps, and adds each step to CLEAR_LIST.
+# This function modifies only $t registers.
+# Receives the following parameters:
+# - $a0 : the starting position, in format xxxx yyyy in hex
+# - $a1 : the x-direction (horizontal ) of the walk ( in {-1, 0, 1} )
+# - $a2 : the y-direction (vertical) of the walk ( in {-1, 0, 1} )
+# - $a3 : the number of steps to take in the direction
+walk_and_clear:
+    push ($ra)               # save return address on stack
+    li $t0, 0                # set the loop variable $t0 = 0
+  walk_and_clear_loop:       # set the loop variable bound $t9 = walk length
+    beq $t0, $a3, walk_and_clear_loop_end
+    
+    # add direction to position, and store in $a0
+    andi $t1, $a0, 0xffff0000
+    srl $t1, $t1, 16        # extract x-pos
+    andi $t2, $a0, 0xffff   # extract y-pos
+
+    add $t1, $t1, $a1       # update the coordinates of the position on the walk
+    add $t2, $t2, $a2
+
+    move $a0, $t1
+    sll $a0, $a0, 16
+    add $a0, $a0, $t2      # convert back to xxxx yyyy in hex form, for next func calls
+
+    push ($t0)             # save persisting data on stack prior to function call
+    push ($a0)
+    push ($a1)
+    push ($a2)
+    push ($a3)
+
+    move $a1, $a0
+    la $a0, CLEAR_LIST
+    jal list_insert       # add the position to clear_list
+
+    pop ($a3)
+    pop ($a2)
+    pop ($a1)
+    pop ($a0)
+    pop ($t0)
+
+    addi $t0, $t0, 1
+    j walk_and_clear_loop
+  walk_and_clear_loop_end:
+    pop ($ra)
+    jr $ra
+
+## Given a position in the BOTTLE in format xxxx yyyy in hex, return the
 ## corresponding entity byte.
 # Takes in the following parameter:
 # - $a0 : the position of the entity to be read 
@@ -1433,6 +1728,90 @@ load_byte_from_bottle:
     add $t5, $t5, $t0
     
     lb $v0, 0($t5)
+    jr $ra
+
+## Given a position in the BOTTLE in format xxxx yyyy in hex and an
+## entity byte, set the entity byte in BOTTLE at the given position.
+## This function modifies only $t registers.
+# Takes in the following parameters:
+# - $a0 : the position of the entity to be read
+# - $a1 : the entity byte to be written
+set_byte_to_bottle:
+    andi $t2, $a0, 0xffff   # extract $t2 = y = lower 16 bits
+    andi $t1, $a0, 0xffff0000
+    srl $t1, $t1, 16        # extract $t1 = x = upper 16 bits
+
+    la $t0, BOTTLE          # load the bottle address for reading
+    
+    lw $t5, BOTTLE_WIDTH    # load information about (x, y) from the bottle;
+    mult $t5, $t2           # (x, y) information is stored at BOTTLE[x + y * BOTTLE_WIDTH] \\
+    mflo $t5                # because each entry occupies one byte
+    add $t5, $t5, $t1
+    add $t5, $t5, $t0
+
+    sb $a1, 0($t5)
+    jr $ra
+
+## Given a position in the BOTTLE in format xxxx yyyy in hex, return 
+## the position of the sibling of the entity stored at the input position.
+## This function assumes that a sibling does exist (that is, the entity
+## at the input position is not a virus and is not abandoned).
+# Takes in the following parameter:
+# - $a0 : the position of the entity
+# Returns:
+# - $v0 : the position of the sibling
+find_sibling:
+    push ($ra)
+    push ($a0)
+    
+    move $a0, $a0
+    jal load_byte_from_bottle # read in the corresp. entity byte
+    move $t0, $v0
+    andi $t0, $t0, 0xf0       # remove irrelevant information
+    srl $t0, $t0, 4
+
+    beq $t0, 0b00, sibling_right   # determine which direction the sibling is in
+    beq $t0, 0b01, sibling_left
+    beq $t0, 0b10, sibling_down
+    beq $t0, 0b11, sibling_up
+
+  sibling_right:
+    li $t1, 1
+    li $t2, 0
+    j compute_sibling_location
+
+  sibling_left:
+    li $t1, -1
+    li $t2, 0
+    j compute_sibling_location
+    
+  sibling_down:
+    li $t1, 0
+    li $t2, 1
+    j compute_sibling_location
+    
+  sibling_up:
+    li $t1, 0
+    li $t2, -1
+    j compute_sibling_location
+
+    # once we know the sibling relative position, compute the absolute position;
+    # NOTICE that we do not check whether the sibling position is within bounds.
+    # If it is not, it is the fault of some previous logic!
+  compute_sibling_location:
+    pop ($v0)
+    andi $t3, $v0, 0xffff0000
+    srl $t3, $t3, 16        # extract x-pos
+    andi $t4, $v0, 0xffff   # extract y-pos
+
+    add $t3, $t3, $t1       # update the coordinates of the position based \\
+    add $t4, $t4, $t2       # on the relative position of the sibling
+
+    move $v0, $t3
+    sll $v0, $v0, 16
+    add $v0, $v0, $t4      # convert back to xxxx yyyy in hex form
+    
+    pop ($ra)
     jr $ra
 
 ##############################################################################
@@ -1643,7 +2022,7 @@ draw_bottle:
     lw $t0, CAPSULE_P1        # load information about the first half \\
     lb $t2, CAPSULE_E1        # of the player-controlled capsule
     
-    beq $t0, -1, draw_return  # if first argument is -1, do not draw \\
+    beq $t0, -1, draw_skip_player  # if first argument is -1, do not draw \\
                               # the player capsule
     
     move $a0, $t2             # draw the first half of the player capsule
@@ -1657,6 +2036,7 @@ draw_bottle:
     move $a1, $t1
     jal draw_entity
   
+  draw_skip_player:
     lw $t0, TILE_SIZE
     la $a0, BOTTLE_DSPL_BUF   # address of pixel array to read from (buffer)
     lw $a1, BOTTLE_HEIGHT     # height of region; this is HEIGHT * TILE_SIZE
@@ -1672,7 +2052,7 @@ draw_bottle:
     lw $t1, ADDR_DSPL         # draw directly on the display
     push ($t1)
     jal draw_region
-  
+
     pop ($ra)                 # retrieve return address from stack
     jr $ra
 
@@ -2378,6 +2758,7 @@ async_loop:
     sw $t1, MIDI_NOTE_COUNT
     
     jr $ra
+
 ##############################################################################
 # MIDI Playback Functions
 ##############################################################################
