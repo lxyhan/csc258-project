@@ -24,20 +24,21 @@ left = 0.75in,
 % Milestones 4 & 5, list what features you
 % implemented, sorted into easy and hard
 % categories.
-Milestones 1 \& 2 have been implemented as of \yyyymmdddate{\today}. The collision detection and generation of new capsules has been completed for Milestone 3, however there is no clear or cascade support in the scenario where 4 or more same-coloured entities are aligned.
+Milestones 1 \& 2 have been implemented as of \yyyymmdddate{\today}. Milestone 3 was completed as of \yyyymmdddate{2025/03/31}, with intermittent fixes and patches on \yyyymmdddate{\today}. As part of milestone 3, a robust clear and cascade system was implemented. As part of milestone 4 / 5, we implemented gravity (easy feature), animations for capsule drops (hard feature), background music (hard feature), sound effects (easy feature), a scoreboard that increments on a clear (hard feature), a Pause Feature (easy feature), an indicator for the next capsule dropped (easy feature), and pixel artwork for Dr. Mario and other game elements (easy feature).
+
+This amounts to a total of 3 hard features, and 4 easy features, which goes above and beyond the requirements set by milestone 5 by 2 extra easy features.
 
 \item How to view the game:
 % TODO: specify the pixes/unit, width and height of
 % your game, etc. NOTE: list these details in
 % the header of your breakout.asm file too!
 \begin{enumerate}
-\item Place all \verb|.bmp| files in the sprites subdirectory of whichever folder you choose to run the source \verb|.asm| file.
-\item Set the unit width and height to 1 px. Set the display width and height to 256 px and 244 px, respectively.
+\item Set the unit width and height to 1 px.
+\item Set the display width and height to 256 px and 244 px, respectively.
 \item If you are on a UNIX machine, change the relative file paths specified in the \verb|Bitmap Assets| segment of the \verb|.data| region to absolute file paths (from the root, not from the home directory).
 \end{enumerate}
 
 \item Game Summary:
-
 % TODO: Tell us a little about your game.
 \textit{What is being stored in memory?} Our game uses memory to store repeatedly-accessed data, including loaded bitmaps, the current state of the game, and time-tracing values. Below is a description of each use.
 
@@ -47,11 +48,21 @@ Milestones 1 \& 2 have been implemented as of \yyyymmdddate{\today}. The collisi
 There are three primary attributes we must keep track of in an entity: the type (either a virus or a capsule half), the colour, and the direction the entity is facing. The final property is relevant only for capsule halves, and is used in rendering the entity and in determining the position of the paired capsule half. A capsule half without a pair is rendered differently and omits certain checks in cascade algorithms.
 
 To store all attributes in 1 byte, we partition the bits. The leading 4 bits represent the direction of the entity, and are ignored if the entity is of type virus. The next three bits correspond to the colour of the entity, which is one-hot encoded. The final bit is a toggle representing whether the entity is a virus (0), or a capsule (1). Any reference to an ``entity byte'' in this document refers to this single byte storing all properties of the entity. Working with entities then simply involves accessing the appropriate index of \verb|BOTTLE| and using bitwise operations to extract or mutate desired properties.
+
 \item We do not keep track of the player-controlled capsule in the \verb|BOTTLE| grid, as this would involve moving the corresponding entity bytes to new locations upon movement, and resetting the previously-occupied entity bytes. Even then, we would need to keep track of the positions of the capsule externally. Instead, we store the positions (4 bytes each) and entity bytes (1 byte each) of each capsule half in memory, and update the position upon movement. When the capsule collides with the floor or another entity underneath it, these entity bytes are migrated to the \verb|BOTTLE| at the stored positions.
+
 \item In order to process higher resolution sprites efficiently, we use external software to draw the schematic, convert it to a bitmap (.bmp) file, then extract the pixel array from the bitmap into memory. Hence, in memory we must store the names of the bitmap files to be rendered as assets, used for \verb|fopen| syscalls, and arrays to be populated by \verb|read| syscalls for each asset. These are found in the \verb|Bitmap Assets| segment of the \verb|.data| region of our source. Please see Figure \ref{fig:bitmap-loaded} as a demo of loaded pixel data.
+
 \item To separate gravity effects from frame rate, we keep track of several variables in memory that concern the system time (\verb|TIMESTAMP|), and the amount of time since gravity application (\verb|DELTA|). \verb|DELTA| is updated on every iteration of the game loop by adding the time difference between the current system time, determined with a syscall, and the previous time, stored in \verb|TIMESTAMP|. Once it exceeds a particular limit, gravity is applied to the player capsule, or every capsule marked to fall during a cascade.
+
+\item Our game handles cascading matches through a simple but effective loop-based approach. When a player places a capsule, the process cascade function initiates a sequence that checks for matches, clears them, applies gravity to make pieces fall, and then repeats this process all until no further matches occur. Each step includes brief animation pauses to make the clearing and falling movements are easily visible for the player.
+
+\item The music system reads a MIDI file at startup and parses it into three parallel arrays: NOTES storing pitch values, DURATIONS tracking note lengths, and ASYNC determining playback behavior. During gameplay, the update music function maintains timing with a timestamp-based approach, advancing through the note sequence when appropriate time intervals have passed. If the MIDI file fails to load, the code falls back to a hardcoded melody of the classic Dr. Mario fever theme. Sound effects for capsule placement, rotation, and virus clearing are triggered by relevant game events using simple notes and instruments with varying pitches and durations.
+
 \end{itemize}
 \end{enumerate}
+
+
 
 \begin{figure}
     \centering
@@ -82,9 +93,9 @@ Bitmap Rendering & Entity Clear \\
 \hline
 Rendering Buffer & Cascade (after Clear) \\
 \hline
-Player Movement & \\
+Player Movement & Background Music \\
 \hline
-Collision Detection & \\
+Collision Detection & Sound Effects \\
 \hline
 Gravity & \\
 \hline
@@ -98,4 +109,16 @@ Gravity & \\
 % features that were more challenging than they
 % might initially seem.
 
+\section{How to Play}
+Dr. Mario challenges players to eliminate viruses lurking in a laboratory bottle using two-colored medical capsules. Success requires strategic placement and quick thinking as the microbes multiply.
+
+\subsection{Controls}
+Our MIPS implementation responds to the following keypresses:
+
+\begin{itemize}
+\item \textbf{Left/Right Arrows}: Maneuver your capsule horizontally within the bottle confines
+\item \textbf{Down Arrow}: Force your capsule to descend more rapidly (useful when confident in placement)
+\item \textbf{Up Arrow}: Rotate Blocks
+\item \textbf{p Key}: Suspend gameplay, allowing brief reflection on your next move
+\end{itemize}
 \end{document}
