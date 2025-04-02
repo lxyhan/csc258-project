@@ -18,14 +18,14 @@
     .data
 ##############################################################################
 ## Bitmap Assets
-##############################################################################
+##############################################################################ww
 DISPLAY_REGION_BUFFER:   # space allocated to avoid overlap between bitmap region
     .space 230000        # and .data segment in memory; DO NOT USE
 F_BACKDROP:
     .asciiz "sprites/backdrop.bmp"
     .align 2
 BACKDROP:           # capsule pixel array; each pixel is 4 bytes \\
-    .space 229376   # DISPLAY_WIDTH * DISPLAY_WIDTH * 4 = 229376
+    .space 229376   # 256 * 244 * 4 = 229376
 F_BOTTLE_GRID_IMG:
     .asciiz "sprites/grid.bmp"
     .align 2
@@ -77,8 +77,8 @@ F_CAP_RED_CENTRE:
     .asciiz "sprites/entities/cap_red_centre.bmp"
     .align 2
 CAP_BLUE:         # capsule pixel array; each pixel is 4 bytes \\
-    .space 1280   # 8 * 8 * 4 * 5 = 1280; we store the bitmap in order \\
-CAP_GREEN:        # [left, right, up, down, centre]
+    .space 1280   # 256 * 5 = 1280; we store the bitmap in order \\
+CAP_GREEN:       # [left, right, up, down, centre]
     .space 1280
 CAP_RED:
     .space 1280
@@ -94,10 +94,11 @@ F_VIRUS_RED:
     .align 2
 VIRUS_BLUE:      # virus pixel array; each pixel is 4 bytes, and \\
     .space 256   # the dimensions of the sprite are TILE_SIZE x TILE_SIZE \\
-VIRUS_GREEN:     # so that our size is 8 * 8 * 4 = 256
+VIRUS_GREEN:    # so that our size is 8 * 8 * 4 = 256
     .space 256
 VIRUS_RED:
     .space 256
+
 
 F_DIGIT_0:       # because of limitations on fread, we must store each digit \\
     .asciiz "sprites/digits/0.bmp" # digit in its own file, tragically :(
@@ -272,21 +273,46 @@ BITMAP_OFFSET:
 ##############################################################################
 # Music and Sound Data
 ##############################################################################
+# File path for MIDI data
+F_MIDI_DATA:
+    .asciiz "music/drmario.mid"
+    .align 2
+
+# Storage for MIDI file data
+MIDI_BUFFER:
+    .space 8192     # Buffer for MIDI file content (increased size)
+    
+# Debug messages
+MSG_MIDI_ERROR:
+    .asciiz "MIDI file could not be parsed correctly. Using default music.\n"
+MSG_MIDI_SUCCESS:
+    .asciiz "MIDI file parsed successfully. Found notes: "
+
+# MIDI file info
+MIDI_FILE_SIZE:
+    .word 0         # Size of loaded MIDI file
+MIDI_NOTE_COUNT:
+    .word 0         # Number of notes extracted from MIDI file
+MAX_NOTES:
+    .word 200       # Maximum number of notes we can store (increased)
+
+# Arrays for parsed MIDI data
 NOTES:
-    .word 76, 76, 60, 76, 60, 72, 76, 60, 79, 60, 60, 60, 67
+    .space 800      # Space for 200 notes (200 * 4 bytes)
 DURATIONS:
-    .word 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200  # 13 entries
+    .space 800      # Space for 200 durations (200 * 4 bytes)
 ASYNC:
-    .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1  # 13 entries
-    .align 2  # word alignmet
-NOTE_COUNT:
-    .word 13  # actual count, updates
+    .space 200      # Space for 200 async flags (200 bytes)
+    .align 2        # Word alignment
+
+# Playback state
 CURRENT_NOTE:
-    .word 0  # current note index
+    .word 0         # Current note index
 LAST_NOTE_TIME:
-    .word 0  # timestamp of last note that was played
+    .word 0         # Timestamp of last note played
 TIME_ACCUMULATOR:
-    .word 0  # tracks overflow time between notes
+    .word 0         # Tracks overflow time between notes
+
 
 ##############################################################################
 # Stack Macros
@@ -1974,12 +2000,467 @@ draw_region:
 
 
 ##############################################################################
-# Sound Functions
+# MIDI File Reading Functions
+##############################################################################
+
+## Load and parse MIDI file
+load_midi_file:
+    push ($ra)           # Save return address
+    
+    # Open the MIDI file
+    li $v0, 13           # System call for opening a file
+    la $a0, F_MIDI_DATA  # Load file name
+    li $a1, 0            # Open for reading
+    li $a2, 0            # Mode is ignored
+    syscall              # Open file
+    move $s0, $v0        # Store file descriptor
+    
+    # Check if file opened successfully
+    bltz $s0, load_midi_error
+    
+    # Read the file content
+    li $v0, 14           # System call for reading file
+    move $a0, $s0        # File descriptor
+    la $a1, MIDI_BUFFER  # Buffer to read into
+    li $a2, 4096         # Maximum bytes to read
+    syscall              # Read file
+    sw $v0, MIDI_FILE_SIZE # Store the number of bytes read
+    
+    # Close the file
+    li $v0, 16           # System call for closing a file
+    move $a0, $s0        # File descriptor
+    syscall              # Close file
+    
+    # Parse the MIDI data
+    jal parse_midi_data
+    
+    pop ($ra)
+    jr $ra
+
+## Error handling for MIDI file loading
+load_midi_error:
+    # If we can't load the MIDI file, fall back to default values
+    jal load_default_music
+    
+    pop ($ra)
+    jr $ra
+
+## Parse MIDI data from buffer into note arrays
+parse_midi_data:
+    push ($ra)
+    push ($s0)
+    push ($s1)
+    push ($s2)
+    push ($s3)
+    push ($s4)
+    push ($s5)
+    push ($s6)
+    push ($s7)
+    
+    # Initialize variables
+    la $s0, MIDI_BUFFER        # Pointer to MIDI data
+    li $s1, 0                  # Note counter
+    lw $s2, MIDI_FILE_SIZE     # Size of MIDI data
+    lw $s3, MAX_NOTES          # Maximum number of notes
+    
+    # Check if file is empty or too small
+    li $t0, 20                 # Minimum reasonable size for a MIDI file
+    blt $s2, $t0, parse_error
+    
+    # Check for MIDI header "MThd"
+    lbu $t0, 0($s0)
+    li $t1, 'M'
+    bne $t0, $t1, parse_error
+    lbu $t0, 1($s0)
+    li $t1, 'T'
+    bne $t0, $t1, parse_error
+    lbu $t0, 2($s0)
+    li $t1, 'h'
+    bne $t0, $t1, parse_error
+    lbu $t0, 3($s0)
+    li $t1, 'd'
+    bne $t0, $t1, parse_error
+    
+    # Get number of tracks (bytes 10-11)
+    lbu $t0, 10($s0)
+    sll $t0, $t0, 8
+    lbu $t1, 11($s0)
+    or $t0, $t0, $t1
+    move $s7, $t0              # Number of tracks
+    
+    # Find the first track chunk (should start with "MTrk")
+    li $s4, 14                 # Start looking after the header
+find_track:
+    # Check if we've gone too far
+    add $t0, $s0, $s4
+    sub $t1, $t0, $s0
+    bge $t1, $s2, parse_error
+    
+    lbu $t0, 0($t0)
+    li $t1, 'M'
+    bne $t0, $t1, next_track_byte
+    
+    add $t0, $s0, $s4
+    addi $t0, $t0, 1
+    lbu $t0, 0($t0)
+    li $t1, 'T'
+    bne $t0, $t1, next_track_byte
+    
+    add $t0, $s0, $s4
+    addi $t0, $t0, 2
+    lbu $t0, 0($t0)
+    li $t1, 'r'
+    bne $t0, $t1, next_track_byte
+    
+    add $t0, $s0, $s4
+    addi $t0, $t0, 3
+    lbu $t0, 0($t0)
+    li $t1, 'k'
+    bne $t0, $t1, next_track_byte
+    
+    # Found the track - get track length
+    add $t0, $s0, $s4
+    addi $t0, $t0, 4
+    lbu $t1, 0($t0)
+    sll $t1, $t1, 24
+    addi $t0, $t0, 1
+    lbu $t2, 0($t0)
+    sll $t2, $t2, 16
+    or $t1, $t1, $t2
+    addi $t0, $t0, 1
+    lbu $t2, 0($t0)
+    sll $t2, $t2, 8
+    or $t1, $t1, $t2
+    addi $t0, $t0, 1
+    lbu $t2, 0($t0)
+    or $t1, $t1, $t2   # t1 contains track length
+    
+    # Start of track data
+    addi $s4, $s4, 8
+    add $s5, $s0, $s4   # s5 points to start of track data
+    add $s6, $s4, $t1   # s6 contains end position of this track
+    
+    j parse_track_found
+    
+next_track_byte:
+    addi $s4, $s4, 1
+    j find_track
+    
+parse_track_found:
+    # Now parse the first track for note events
+    # Skip delta-time VLQ in front of each event
+    # s4 = current position in track
+    # s5 = start of track data
+    # s6 = end position of track
+    li $t9, 0           # Active instrument from latest program change
+    
+parse_track_loop:
+    bge $s4, $s6, parse_done   # End of track reached
+    bge $s1, $s3, parse_done   # Max notes reached
+    
+    # Skip delta time VLQ (variable length quantity)
+    add $t0, $s0, $s4
+    lbu $t1, 0($t0)
+skip_vlq:
+    # If MSB is set, read next byte
+    andi $t2, $t1, 0x80
+    beqz $t2, vlq_done
+    addi $s4, $s4, 1
+    add $t0, $s0, $s4
+    lbu $t1, 0($t0)
+    j skip_vlq
+vlq_done:
+    addi $s4, $s4, 1
+    
+    # Read event byte
+    add $t0, $s0, $s4
+    lbu $t1, 0($t0)
+    
+    # Check for program change event (0xC0-0xCF)
+    andi $t2, $t1, 0xF0
+    li $t3, 0xC0
+    beq $t2, $t3, program_change
+    
+    # Check for meta event (0xFF)
+    li $t3, 0xFF
+    beq $t1, $t3, meta_event
+    
+    # Check for running status (data byte without status)
+    andi $t2, $t1, 0x80
+    beqz $t2, use_running_status
+    
+    # Normal status byte
+    move $t8, $t1       # Save as running status
+    addi $s4, $s4, 1
+    j check_note_event
+    
+use_running_status:
+    # t8 should already have the running status from before
+    j check_note_event
+    
+program_change:
+    # Parse a program change event (sets instrument)
+    addi $s4, $s4, 1
+    add $t0, $s0, $s4
+    lbu $t9, 0($t0)      # Get new instrument
+    addi $s4, $s4, 1
+    j parse_track_loop
+    
+meta_event:
+    # Skip meta events
+    addi $s4, $s4, 1
+    add $t0, $s0, $s4
+    lbu $t2, 0($t0)      # Meta event type
+    addi $s4, $s4, 1
+    
+    # Read length of meta event
+    add $t0, $s0, $s4
+    lbu $t3, 0($t0)      # Length
+    addi $s4, $s4, 1
+    
+    # Skip over the meta event data
+    add $s4, $s4, $t3
+    j parse_track_loop
+    
+check_note_event:
+    # Check if it's a note-on event (0x90-0x9F)
+    andi $t3, $t8, 0xF0
+    li $t4, 0x90
+    bne $t3, $t4, not_note_on
+    
+    # We have a note-on event, read pitch
+    add $t0, $s0, $s4
+    lbu $t5, 0($t0)      # Pitch
+    addi $s4, $s4, 1
+    
+    # Read velocity
+    add $t0, $s0, $s4
+    lbu $t6, 0($t0)      # Velocity
+    addi $s4, $s4, 1
+    
+    # If velocity is 0, it's actually a note-off
+    beqz $t6, parse_track_loop
+    
+    # Store the note pitch
+    la $t0, NOTES
+    sll $t1, $s1, 2       # Multiply index by 4 for word alignment
+    add $t0, $t0, $t1
+    sw $t5, 0($t0)        # Store note pitch
+    
+    # Store duration (fixed for now)
+    la $t0, DURATIONS
+    add $t0, $t0, $t1
+    li $t2, 200           # Default duration (can be improved)
+    sw $t2, 0($t0)
+    
+    # Store async flag
+    la $t0, ASYNC
+    add $t0, $t0, $s1     # Byte aligned
+    li $t2, 1             # Always async
+    sb $t2, 0($t0)
+    
+    # Increment note counter
+    addi $s1, $s1, 1
+    j parse_track_loop
+    
+not_note_on:
+    # Check if it's a note-off event (0x80-0x8F)
+    li $t4, 0x80
+    beq $t3, $t4, note_off
+    
+    # Other events will have 1 or 2 data bytes depending on status
+    andi $t3, $t8, 0xF0
+    li $t4, 0xC0      # Program change and Channel pressure have 1 byte
+    beq $t3, $t4, one_data_byte
+    li $t4, 0xD0      # Channel pressure
+    beq $t3, $t4, one_data_byte
+    
+    # Default to 2 data bytes
+    addi $s4, $s4, 2
+    j parse_track_loop
+    
+one_data_byte:
+    addi $s4, $s4, 1
+    j parse_track_loop
+    
+note_off:
+    # Skip note-off (2 data bytes)
+    addi $s4, $s4, 2
+    j parse_track_loop
+    
+parse_done:
+    # Store the number of notes found
+    sw $s1, MIDI_NOTE_COUNT
+    
+    # If we didn't find any valid notes, fall back to defaults
+    bgtz $s1, parse_success
+    
+parse_error:
+    # Print debug message (optional)
+    li $v0, 4
+    la $a0, MSG_MIDI_ERROR
+    syscall
+    
+    # Fall back to default music
+    jal load_default_music
+    j parse_exit
+    
+parse_success:
+    # Print success message (optional)
+    li $v0, 4
+    la $a0, MSG_MIDI_SUCCESS
+    syscall
+    li $v0, 1
+    move $a0, $s1
+    syscall
+    
+parse_exit:
+    pop ($s7)
+    pop ($s6)
+    pop ($s5)
+    pop ($s4)
+    pop ($s3)
+    pop ($s2)
+    pop ($s1)
+    pop ($s0)
+    pop ($ra)
+    jr $ra
+
+## Load default music data with full melody
+load_default_music:
+    # Default note array - complete melody
+    la $t0, NOTES
+    
+    # First part: A#, B, A#, B, A, G, G, B, A#, B, A#, B, G, G
+    li $t1, 70     # A#4
+    sw $t1, 0($t0)
+    
+    li $t1, 71     # B4
+    sw $t1, 4($t0)
+    
+    li $t1, 70     # A#4
+    sw $t1, 8($t0)
+    
+    li $t1, 71     # B4
+    sw $t1, 12($t0)
+    
+    li $t1, 69     # A4
+    sw $t1, 16($t0)
+    
+    li $t1, 67     # G4
+    sw $t1, 20($t0)
+    
+    li $t1, 67     # G4
+    sw $t1, 24($t0)
+    
+    li $t1, 69     # B4
+    sw $t1, 28($t0)
+    
+    li $t1, 70     # A#4
+    sw $t1, 32($t0)
+    
+    li $t1, 71     # B4
+    sw $t1, 36($t0)
+    
+    li $t1, 70     # A#4
+    sw $t1, 40($t0)
+    
+    li $t1, 71     # B4
+    sw $t1, 44($t0)
+    
+    li $t1, 70     # G4
+    sw $t1, 48($t0)
+    
+    li $t1, 67     # G4
+    sw $t1, 52($t0)
+    
+    # Second part: D#, E, D#, E, D, C, C, D, D#, E, D#, E, D, C, C
+    li $t1, 63     # D#4
+    sw $t1, 56($t0)
+    
+    li $t1, 64     # E4
+    sw $t1, 60($t0)
+    
+    li $t1, 63     # D#4
+    sw $t1, 64($t0)
+    
+    li $t1, 64     # E4
+    sw $t1, 68($t0)
+    
+    li $t1, 62     # D4
+    sw $t1, 72($t0)
+    
+    li $t1, 60     # C4
+    sw $t1, 76($t0)
+    
+    li $t1, 60     # C4
+    sw $t1, 80($t0)
+    
+    li $t1, 62     # D4
+    sw $t1, 84($t0)
+    
+    li $t1, 63     # D#4
+    sw $t1, 88($t0)
+    
+    li $t1, 64     # E4
+    sw $t1, 92($t0)
+    
+    li $t1, 63     # D#4
+    sw $t1, 96($t0)
+    
+    li $t1, 64     # E4
+    sw $t1, 100($t0)
+    
+    li $t1, 62     # D4
+    sw $t1, 104($t0)
+    
+    li $t1, 60     # C4
+    sw $t1, 108($t0)
+    
+    li $t1, 60     # C4
+    sw $t1, 112($t0)
+    
+    # Default durations
+    la $t0, DURATIONS
+    
+    # Regular durations (200ms) for all notes
+    li $t2, 29     # Total notes
+    li $t1, 0      # Counter
+    
+duration_loop:
+    li $t3, 200    # 200ms duration
+    sw $t3, 0($t0)
+    addi $t0, $t0, 4
+    addi $t1, $t1, 1
+    blt $t1, $t2, duration_loop
+    
+    # Default async flags - all notes play asynchronously
+    la $t0, ASYNC
+    li $t2, 29     # Total notes
+    li $t1, 0      # Counter
+    
+async_loop:
+    li $t3, 1
+    sb $t3, 0($t0)
+    addi $t0, $t0, 1
+    addi $t1, $t1, 1
+    blt $t1, $t2, async_loop
+    
+    # Set default note count
+    li $t1, 29     # Number of notes in the sequence
+    sw $t1, MIDI_NOTE_COUNT
+    
+    jr $ra
+##############################################################################
+# MIDI Playback Functions
 ##############################################################################
 
 ## Initialize the music system
 init_music:
     push ($ra)
+    
+    # Load and parse the MIDI file
+    jal load_midi_file
     
     # Initialize MIDI synthesizer
     li $v0, 31
@@ -2057,14 +2538,14 @@ play_done:
     pop ($ra)
     jr $ra
     
-## Play sound when a capsule is placed down (collision code that Stefan wrote)
+## Play sound when a capsule is placed down
 play_place_sound:
     push ($ra)
     li $v0, 31
     li $a0, 60  # C4 note
     li $a1, 150  # Duration
-    li $a2, 127  # this is vo
-    li $a3, 30  # change to volume 30
+    li $a2, 127  # this is instrument
+    li $a3, 127  # change to max vol
     syscall
     pop ($ra)
     jr $ra
@@ -2076,7 +2557,7 @@ play_rotate_sound:
     li $a0, 72  # C5 note
     li $a1, 50  # Duration
     li $a2, 100  # this is the instrument
-    li $a3, 30  # change to volume 30
+    li $a3, 127  # change to max vol
     syscall
     pop ($ra)
     jr $ra
@@ -2087,8 +2568,8 @@ play_clear_sound:
     li $v0, 31
     li $a0, 84  # C6 note
     li $a1, 300  # Duration
-    li $a2, 127  # Volume
-    li $a3, 30  # again, channel 30
+    li $a2, 127  # instrument
+    li $a3, 127  # again, max vol
     syscall
     pop ($ra)
     jr $ra
@@ -2118,7 +2599,7 @@ update_music:
 check_play_note:
     # Load current note index and total note count
     lw $t4, CURRENT_NOTE
-    lw $t5, NOTE_COUNT
+    lw $t5, MIDI_NOTE_COUNT
     
     # Check if we've reached the end of the song
     bge $t4, $t5, reset_music
@@ -2141,11 +2622,15 @@ check_play_note:
     add $t6, $t6, $t7
     lw $a0, 0($t6)  # Note pitch
     
+    # Get async flag
+    la $t6, ASYNC
+    add $t6, $t6, $t4  # Byte aligned
+    lb $t9, 0($t6)  # Async flag
+    
     # Set up parameters for playing the note
     move $a1, $t8   # Duration
     li $a2, 1       # Instrument (acoustic grand)
     li $a3, 90      # Volume (slightly reduced)
-    li $t9, 1       # Always play asynchronously
     
     # Save important registers before function call
     push ($t0)
