@@ -22,7 +22,11 @@
 DISPLAY_REGION_BUFFER:   # space allocated to avoid overlap between bitmap region
     .space 230000        # and .data segment in memory; DO NOT USE
 F_BACKDROP:
+<<<<<<< HEAD
     .asciiz "/Users/lxyhan/Downloads/csc258-project-main/sprites/bottle.bmp"
+=======
+    .asciiz "sprites/backdrop.bmp"
+>>>>>>> 88020b150d38ad8b46bedb3aee43e4be14d26bd6
     .align 2
 BACKDROP:           # capsule pixel array; each pixel is 4 bytes \\
     .space 229376   # 256 * 244 * 4 = 229376
@@ -138,6 +142,12 @@ F_SCOREBOARD:
 SCOREBOARD:      # space for 4 digits, so 4 * sizeof(DIGITS)
     .space 2048
 
+F_PAUSED:
+    .asciiz "sprites/paused.bmp"
+    .align 2
+PAUSED_IMG:      # 5 width, 2 height region, in tiles
+    .space 2560  # 5 x TILE_SIZE x 2 x TILE_SIZE x 4 bytes per px
+
 ##############################################################################
 # Immutable Data
 ##############################################################################
@@ -159,6 +169,8 @@ PREVIEW_OFFSET:     # the (x, y) starting position of the preview capsule \\
     .word 0xa80080  # in pixels; equates to (168, 120)
 SCORE_OFFSET:       # the (x, y) starting position of the scoreboard \\
     .word 0xb80038  # for current score; equates to (176, 56)
+PAUSE_OFFSET:
+    .word 0x80008   # the (x, y) starting position of the pause indicator
 
 VIRUS_CAP:          # number of viruses to spawn at game start
     .word 4
@@ -176,6 +188,11 @@ VIRUS_CLEAR_PTS:    # points received for clearing a virus
     .word 500
 CAPSULE_CLEAR_PTS:  # points receieved for clearing a capsule
     .word 25
+
+SCREEN_BACKUP:      # display pixel storage; used for graphical \\
+    .space 229376   # transforms as in the pause screen
+SCREEN_DESAT:       # display pixel storage for post-transformation \\
+    .space 229376   # pixels; to be displayed during pause screen
 
 ADDR_DSPL:          # address of the bitmap display
     .word 0x10008000
@@ -544,6 +561,12 @@ init_bmp:
     sll $a2, $s2, 2          # we display 4 digits in scoreboard, so 4 times size \\
     jal load_bmp             # of one digit
 
+    #################
+    la $a0, F_PAUSED
+    la $a1, PAUSED_IMG
+    li $a2, 2560             # 7 x TILE_SIZE x 2 x TILE_SIZE x 4 bytes per px
+    jal load_bmp
+
     jr $s1
 
 ## Load the pixel data of a bitmap into memory. Reads through
@@ -872,13 +895,13 @@ keyboard_input:
     lb $t3, 0($t3)                       # check that q is held
     seq $t4, $t1, 0x71                   # check that q is pressed
     and $t5, $t3, $t4                    # 1 if both conditions hold
-    beq $t5, 1, exit                     # exit if q was pressed
+    beq $t5, 1, exit                  # exit if q was pressed
     
     addi $t3, $t2, 0x70
     lb $t3, 0($t3)                       # check that p is held
     seq $t4, $t1, 0x70                   # check that p is pressed
     and $t5, $t3, $t4                    # 1 if both conditions hold
-    beq $t5, 1, trig_pause               # pause if p was pressed
+    beq $t5, 1, trig_pause            # pause if p was pressed
 
     addi $t3, $t2, 0x77
     lb $t3, 0($t3)                       # check that w is held
@@ -926,7 +949,7 @@ keyboard_input:
 
     j keyboard_input_exit
   trig_pause:                            # pause the game if running, or start it if paused
-    # TODO: we may choose to implement this as part of Milestone 5
+    jal pause_menu
     j keyboard_input_exit
   keyboard_input_exit:
     pop ($ra)                       # retrieve return address from the stack
@@ -1456,6 +1479,119 @@ memcpy:
   
     j memcpy_loop
   memcpy_exit:
+    jr $ra
+
+## Apply the pause menu view to the display. This is maintained
+## until the 'p' key is pressed to unpause.
+# This function takes in no arguments.
+pause_menu:
+    push ($ra)
+    
+    lw $a0, ADDR_DSPL         # copy the current display contents to \\
+    la $a1, SCREEN_BACKUP     # a safe space prior to transformation
+    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
+    jal memcpy
+
+    la $a0, SCREEN_BACKUP     # copy the saved display pixels to a space \\
+    la $a1, SCREEN_DESAT      # where they can then be transformed
+    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
+    jal memcpy
+
+    li $s0, 0                 # set a loop variable
+    li $s1, 57344             # DISPLAY_WIDTH * DISPLAY_HEIGHT
+    la $s2, SCREEN_DESAT      # load the memory to be transformed
+  pause_desaturate_loop:
+    bge $s0, $s1, pause_desaturate_loop_exit
+
+    move $a0, $s2
+    jal desaturate_px         # desaturate the pixel at the given location
+    
+    addi $s0, $s0, 1
+    addi $s2, $s2, 4
+    j pause_desaturate_loop
+  pause_desaturate_loop_exit: # once we are done, every pixel is desaturated
+
+    # attach the paused indicator on the desaturated screen
+    la $a0, PAUSED_IMG        # source pixel array
+    li $a1, 16                # height 2 tiles x 8 pixels per tile
+    li $a2, 40                # width 5 tiles x 8 pixels per tile
+    lw $a3, PAUSE_OFFSET      # top left corner to draw from
+    lw $t0, DISPLAY_WIDTH     # width of target
+    push ($t0)
+    la $t0, SCREEN_DESAT      # target pixel array
+    push ($t0)
+    jal draw_region
+    
+    la $a0, SCREEN_DESAT      # move the transformed pixel screen to the \\
+    lw $a1, ADDR_DSPL         # display's location in memory
+    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
+    jal memcpy
+
+  pause_loop:
+    li $v0, 32                # sleep for a frame
+    lw $a0, SLEEP_TIME
+    syscall
+
+    lw $t0, ADDR_KBRD               # $t0 = base address for keyboard
+    lw $t1, 0($t0)                  # load first word from keyboard
+    lw $t2, 4($t0)                  # load the key pressed
+    seq $t4, $t1, 1                 # check that a key is pressed
+    seq $t5, $t2, 0x70              # check that p is pressed
+    and $t5, $t4, $t5               # 1 if both conditions hold, in \\
+    beq $t5, 1, unpause          # which case we unpause
+
+    j pause_loop
+  unpause:
+    li $v0, 30
+    syscall                   # load system time into ($a1, $a0)
+    sw $a0, TIMESTAMP         # determine current timestamp; this is to \\
+                              # avoid drastic increments on DELTA over the \\
+                              # time the game is paused
+
+    la $a0, SCREEN_BACKUP     # restore the original display, as was before \\
+    lw $a1, ADDR_DSPL         # modifications by the paused menu
+    li $a2, 229376            # DISPLAY_WIDTH * DISPLAY_HEIGHT * 4
+    jal memcpy
+
+    pop ($ra)
+    jr $ra
+
+## Given the input pixel, returns a desaturated version of the pixel.
+## This does not return anything, but mutates the pixel at the given address.
+# This function modifies only $t registers.
+# This function recieves the following argument:
+# - $a0 : the address of the first byte of the 4-byte pixel; the 
+#         pixel should be in form RRGGBBAA, where AA is ignored
+desaturate_px:
+    lb $t0, 0($a0)       # $t0 = red value
+    andi $t0, $t0, 0xff  # we must ignore anything but the last byte
+    lb $t1, 1($a0)       # $t1 = green value
+    andi $t1, $t1, 0xff
+    lb $t2, 2($a0)       # $t2 = blue value
+    andi $t2, $t2, 0xff
+
+    add $t3, $t0, $t1  # our greyscale value is
+    add $t3, $t3, $t2  # $t3 = i = (R + G + B) / 3
+    li $t4, 3
+    div $t3, $t4
+    mflo $t3
+
+    sub $t4, $t3, $t0  # $t4 = dr = i - R
+    sub $t5, $t3, $t1  # $t5 = dg = i - G
+    sub $t6, $t3, $t2  # $t6 = db = i - B
+
+    sra $t4, $t4, 1    # dilate the change in colour to half \\
+    sra $t5, $t5, 1    # of its current value, to avoid going \\
+    sra $t6, $t6, 1    # completely greyscale
+
+    add $t0, $t0, $t4  # update red, green, and blue \\
+    add $t1, $t1, $t5  # values by changes in colour \\
+    add $t2, $t2, $t6  # dr, dg, and db
+
+    sb $t0, 0($a0)     # save these changed colours at \\
+    sb $t1, 1($a0)     # the original address
+    sb $t2, 2($a0)
+    
     jr $ra
 
 ## Draw a the current state of the game, including the backdrop,
