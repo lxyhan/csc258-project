@@ -1251,11 +1251,6 @@ handle_touchdown:
   handle_touchdown_loop:
     jal check_matches          # search for any matches made by entities in \\
                                # the TOUCHDOWN_LIST
-
-    # if no matches were made, immediately escape
-    la $a0, CLEAR_LIST
-    jal list_size
-    beq $v0, 0, handle_touchdown_exit
     
     jal clear_matches          # clear any matches found in check_matches
     jal apply_gravity          # apply gravity to anything that is suspended
@@ -1271,8 +1266,6 @@ handle_touchdown:
                                       # nothing left to update
 
   handle_touchdown_exit:
-    la $a0, CLEAR_LIST      # remove any remaining elements from the clear list
-    jal list_clear
     
     li $v0, 30              # reset timestamp so that we don't over-apply gravity
     syscall                 # load system time into ($a1, $a0)
@@ -1388,8 +1381,6 @@ check_matches:
   match_tdwn_loop_end:
     move $a0, $s7             # clear the touchdown list when done
     jal list_clear
-    la $s0, CLEAR_LIST  # TEMP
-    addi $t0, $t0, 1    # TEMP
     
     pop ($ra)
     jr $ra
@@ -1430,6 +1421,10 @@ clear_matches:
     lw $s4, VIRUS_CLEAR_PTS
     add $s3, $s3, $s4
     sw $s3, SCORE
+
+    lw $t0, VIRUS_COUNT
+    addi $t0, $t0, -1
+    sw $t0, VIRUS_COUNT
     j check_for_sibling
 
     add_capsule_score:
@@ -1471,14 +1466,19 @@ clear_matches:
     addi $s0, $s0, 1
     j clear_match_loop
   clear_match_loop_end:
-
+  
+    la $a0, CLEAR_LIST       # if nothing is cleared, do not draw the \\
+    jal list_size            # extra frame
+    beq $v0, 0, clear_cleanup_and_exit
+    
     jal play_clear_sound
     jal draw                 # draw the new animated clear state
     li $v0, 32               # sleep briefly to show the frame
     lw $a0, SLEEP_TIME_CASCADE
     syscall
-    
-    move $a0, $s7
+
+  clear_cleanup_and_exit:
+    la $a0, CLEAR_LIST
     jal list_clear           # empty out the clear list when done
     pop ($ra)
     jr $ra
